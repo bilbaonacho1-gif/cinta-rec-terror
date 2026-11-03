@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Engine } from '../engine/Engine';
 import { HowToPlay } from './HowToPlay';
+import { useUI } from '../engine/store';
+
+/** Barra de carga de los assets 3D (estilo contador de cinta). */
+function LoadBar({ progress }: { progress: number }) {
+  const pct = Math.round(progress * 100);
+  return (
+    <div className="loadbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Cargando modelos 3D">
+      <span>CARGANDO MODELOS 3D</span>
+      <div className="bar">
+        <i style={{ width: `${pct}%` }} />
+      </div>
+      <span className="pct">{pct}%</span>
+    </div>
+  );
+}
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -23,6 +38,7 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const skip = useRef(false);
+  const ui = useUI();
 
   useEffect(() => {
     let alive = true;
@@ -62,6 +78,7 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
   return (
     <div className={`screen intro ${step === 'done' ? 'hidden' : ''}`} onPointerDown={() => (skip.current = true)}>
       <div className="noise-bg" />
+      {!ui.modelsReady && step !== 'done' && <LoadBar progress={ui.loadProgress} />}
       {step === 'lines' && line >= 0 && <div className={`intro-line ${visible ? 'on' : ''}`}>{LINES[line]}</div>}
       {step === 'logo' && (
         <>
@@ -71,8 +88,8 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
             </div>
             <div className="sub">LA ÚLTIMA CINTA</div>
           </div>
-          <button type="button" className="btn-screen on" disabled={busy} onClick={start}>
-            [ INICIAR ]
+          <button type="button" className="btn-screen on" disabled={busy || !ui.modelsReady} onClick={start}>
+            {ui.modelsReady ? '[ INICIAR ]' : `CARGANDO… ${Math.round(ui.loadProgress * 100)}%`}
           </button>
         </>
       )}

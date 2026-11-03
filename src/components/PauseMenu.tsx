@@ -73,6 +73,12 @@ export function PauseMenu({ engine }: { engine: Engine }) {
           </button>
         </div>
         <div className="row">
+          <span>MEDIDOR DE FPS</span>
+          <button type="button" onClick={() => engine.toggleFps()}>
+            {ui.showFps ? 'SÍ' : 'NO'}
+          </button>
+        </div>
+        <div className="row">
           <span>CENTRAR VISTA</span>
           <button type="button" onClick={() => engine.recenter()}>
             OK

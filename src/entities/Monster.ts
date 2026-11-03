@@ -357,6 +357,7 @@ export class MonsterEntity {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.frustumCulled = false;
+      mesh.castShadow = true;
       const src = mesh.material as THREE.MeshStandardMaterial;
       const mat = new THREE.MeshStandardMaterial({ map: src.map ?? null, color: 0xffffff, roughness: 0.85, metalness: 0, emissiveMap: src.map ?? null });
       mesh.material = mat;

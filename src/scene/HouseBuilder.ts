@@ -60,16 +60,85 @@ export class HouseBuilder {
       build();
       const meshes = this.batch.build(this.group, name);
       this.occluders.push(...meshes.filter((mm) => !(mm.material as THREE.Material).transparent));
+      for (const mesh of meshes) this.setupShadows(mesh);
     }
     for (const d of Object.values(this.doors)) {
       d.pivot.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) this.occluders.push(o);
+        if (!(o as THREE.Mesh).isMesh) return;
+        this.occluders.push(o);
+        o.castShadow = true;
+        o.receiveShadow = true;
       });
     }
     this.buildWaypoints();
+    this.pickables.name = 'pickables';
+    this.group.add(this.pickables);
     scene.add(this.group);
-    scene.add(new THREE.HemisphereLight(0x3a4660, 0x120e0a, 0.28));
+    // luz de relleno: cielo/suelo (hemisferio) + ambiente muy baja para que los negros no sean absolutos
+    scene.add(new THREE.HemisphereLight(0x3a4660, 0x120e0a, 0.22));
+    scene.add(new THREE.AmbientLight(0x20242c, 0.3));
     this.lights = new LightPool(scene, this.fixtures, 4);
+    this.shadowLight = this.makeShadowLight(scene);
+  }
+
+  // ------------------------------------------------------------------ sombras
+  /**
+   * Sombras optimizadas para celular: UNA sola luz con sombra (spot de 512 px) que se ubica en la lámpara
+   * de techo más cercana al jugador y apunta hacia abajo. Proyectan los muebles, los modelos y el monstruo;
+   * paredes, pisos y techos sólo reciben (así el pase de sombras dibuja muy poca geometría).
+   */
+  readonly shadowLight: THREE.SpotLight;
+  private shadowFixture: LampFixture | null = null;
+  private shadowTimer = 0;
+  private static readonly SHADOW_LAMPS = ['hallLamp1', 'hallLamp2', 'storeTube', 'livingLamp', 'deskLamp', 'candles'];
+
+  private makeShadowLight(scene: THREE.Scene): THREE.SpotLight {
+    const l = new THREE.SpotLight(0xffb070, 0, 9, 1.05, 0.75, 2);
+    l.castShadow = true;
+    l.shadow.mapSize.set(512, 512);
+    l.shadow.camera.near = 0.2;
+    l.shadow.camera.far = 9;
+    l.shadow.bias = -0.0006;
+    l.shadow.normalBias = 0.03;
+    scene.add(l, l.target);
+    return l;
+  }
+
+  /** Superficies grandes reciben sombra; muebles y objetos además la proyectan. */
+  private setupShadows(mesh: THREE.Mesh): void {
+    const mat = mesh.material as THREE.Material;
+    mesh.receiveShadow = !mat.transparent;
+    mesh.castShadow = !mat.transparent && !/^(wall|floor|ceiling|concrete|rug|persiana|window)/.test(mat.name);
+  }
+
+  private updateShadowLight(dt: number, focus: THREE.Vector3): void {
+    this.shadowTimer -= dt;
+    if (this.shadowTimer <= 0) {
+      this.shadowTimer = 0.4;
+      let best: LampFixture | null = null;
+      let bestD = 7 * 7;
+      for (const id of HouseBuilder.SHADOW_LAMPS) {
+        const f = this.lights.get(id);
+        if (!f || !f.on) continue;
+        const d = f.position.distanceToSquared(focus);
+        if (d < bestD) {
+          bestD = d;
+          best = f;
+        }
+      }
+      this.shadowFixture = best;
+    }
+    const f = this.shadowFixture;
+    const l = this.shadowLight;
+    if (!f) {
+      l.intensity = 0;
+      return;
+    }
+    l.position.copy(f.position);
+    l.target.position.set(f.position.x, 0, f.position.z);
+    l.color.copy(f.color);
+    // suma poca luz: lo importante es la sombra, no iluminar de más
+    l.intensity = f.intensity * f.level * 0.45;
   }
 
   // ------------------------------------------------------------------ helpers
@@ -117,8 +186,31 @@ export class HouseBuilder {
   private item(item: Omit<InteractiveItem, 'collected'>): InteractiveItem {
     const full: InteractiveItem = { ...item, collected: false };
     this.interactiveItems.push(full);
+    // volumen invisible para seleccionar el objeto tocándolo en la pantalla (Raycaster)
+    const r = HouseBuilder.PICK_RADIUS[item.kind] ?? 0.2;
+    const hit = new THREE.Mesh(HouseBuilder.pickGeometry, HouseBuilder.pickMaterial);
+    hit.scale.setScalar(r);
+    hit.position.copy(item.position);
+    hit.visible = false;
+    hit.name = `pick:${item.id}`;
+    hit.userData.item = full;
+    this.pickables.add(hit);
     return full;
   }
+
+  /** Volúmenes de selección táctil (invisibles: el Raycaster los detecta igual). */
+  readonly pickables = new THREE.Group();
+  private static readonly pickGeometry = new THREE.SphereGeometry(1, 8, 6);
+  private static readonly pickMaterial = new THREE.MeshBasicMaterial();
+  private static readonly PICK_RADIUS: Partial<Record<InteractiveItem['kind'], number>> = {
+    tape: 0.17,
+    battery: 0.16,
+    note: 0.24,
+    photo: 0.24,
+    radio: 0.25,
+    door: 0.5,
+    exit: 0.55,
+  };
 
   private addFixture(f: LampFixture): LampFixture {
     this.fixtures.push(f);
@@ -500,7 +592,11 @@ export class HouseBuilder {
     put('SM_Sausages_01', 0.2, 0.915, -22.55, 0.2);
 
     const meshes = batch.build(this.group, 'models');
-    for (const mesh of meshes) mesh.name = `glb:${mesh.name}`;
+    for (const mesh of meshes) {
+      mesh.name = `glb:${mesh.name}`;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
   }
 
   // ------------------------------------------------------------------ objetos
@@ -575,6 +671,7 @@ export class HouseBuilder {
 
   update(dt: number, t: number, focus: THREE.Vector3): void {
     this.lights.update(dt, t, focus);
+    this.updateShadowLight(dt, focus);
     for (const d of Object.values(this.doors)) d.update(dt);
     for (const s of this.tvScreens) s.uniforms.uTime.value = t;
     for (const fn of this.animated) fn(dt, t);

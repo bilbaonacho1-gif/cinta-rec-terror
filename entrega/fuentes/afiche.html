@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Afiche — REC: La Última Cinta</title>
+<!--
+  Afiche A4 (210 × 297 mm) con el QR de acceso al proyecto.
+  Se exporta a PNG 300 dpi y a PDF con entrega/fuentes/exportar.mjs (Playwright).
+-->
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --bg: #070707;
+    --fg: #ebe7dc;
+    --dim: #9c968a;
+    --red: #e3342f;
+    --nv: #7dff8a;
+    --mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    --sans: 'Inter', 'DejaVu Sans', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  .page {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    color: var(--fg);
+    font-family: var(--sans);
+    padding: 13mm 13mm 16mm;
+    display: flex;
+    flex-direction: column;
+    background:
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at 50% 35%, #1d150f 0%, #0b0908 55%, #050505 100%);
+  }
+  /* esquinas del visor de la videocámara */
+  .corner { position: absolute; width: 14mm; height: 14mm; border: 0.7mm solid rgba(235, 231, 220, 0.75); }
+  .tl { top: 7mm; left: 7mm; border-right: 0; border-bottom: 0; }
+  .tr { top: 7mm; right: 7mm; border-left: 0; border-bottom: 0; }
+  .bl { bottom: 7mm; left: 7mm; border-right: 0; border-top: 0; }
+  .br { bottom: 7mm; right: 7mm; border-left: 0; border-top: 0; }
+
+  .rec-line {
+    display: flex;
+    justify-content: space-between;
+    font: 600 10pt/1 var(--mono);
+    letter-spacing: 0.18em;
+    color: var(--fg);
+  }
+  .rec-line .dot { color: var(--red); }
+  .rec-line .dim { color: var(--dim); font-weight: 400; }
+
+  h1 {
+    margin: 6mm 0 0;
+    font: 800 38pt/0.98 var(--mono);
+    letter-spacing: -0.01em;
+  }
+  h1 .rec { color: var(--red); }
+  .subtitle {
+    margin: 3mm 0 0;
+    font: 500 12.5pt/1.35 var(--sans);
+    color: var(--dim);
+    letter-spacing: 0.02em;
+  }
+  .hook {
+    margin: 4mm 0 0;
+    font: 600 13.5pt/1.3 var(--sans);
+    max-width: 150mm;
+  }
+  .hook em { font-style: normal; color: var(--red); }
+
+  .main {
+    margin-top: 5mm;
+    display: grid;
+    grid-template-columns: 47mm 1fr;
+    gap: 8mm;
+    align-items: stretch;
+    align-items: start;
+  }
+  /* celular con una captura real del juego */
+  .phone {
+    width: 47mm;
+    border-radius: 7mm;
+    padding: 2mm;
+    background: linear-gradient(160deg, #2b2b2b, #0e0e0e);
+    box-shadow: 0 0 0 0.4mm #3a3a3a, 0 6mm 14mm rgba(0, 0, 0, 0.7), 0 0 18mm rgba(227, 52, 47, 0.12);
+  }
+  .phone img { display: block; width: 100%; border-radius: 5.2mm; }
+
+  .qr-card {
+    background: #fff;
+    color: #0a0a0a;
+    border-radius: 4mm;
+    padding: 5mm 6mm;
+    display: grid;
+    grid-template-columns: 58mm 1fr;
+    gap: 6mm;
+    align-items: center;
+    text-align: left;
+  }
+  .qr-card .scan {
+    font: 800 12.5pt/1.15 var(--sans);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .qr-card img { display: block; width: 58mm; image-rendering: pixelated; }
+  .right-col { display: flex; flex-direction: column; gap: 5mm; }
+  .qr-card .url { font: 600 9pt/1.2 var(--mono); letter-spacing: 0.02em; }
+  .qr-card .note { margin-top: 1.5mm; font: 500 8pt/1.3 var(--sans); color: #555; }
+
+  .nvshot {
+    margin-top: 4mm;
+    position: relative;
+    border: 0.5mm solid rgba(125, 255, 138, 0.55);
+    height: 46mm;
+    overflow: hidden;
+  }
+  .nvshot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 30% 55%; }
+  .nvshot span {
+    position: absolute;
+    left: 2.5mm;
+    bottom: 2mm;
+    font: 700 8pt/1 var(--mono);
+    letter-spacing: 0.15em;
+    color: var(--nv);
+    background: rgba(0, 0, 0, 0.55);
+    padding: 1.2mm 1.8mm;
+  }
+
+  h2 {
+    margin: 0 0 3mm;
+    font: 700 9pt/1 var(--mono);
+    letter-spacing: 0.3em;
+    color: var(--dim);
+  }
+  .find { margin-top: 5mm; }
+  .find ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .find li {
+    border-top: 0.4mm solid rgba(235, 231, 220, 0.25);
+    padding-top: 2.5mm;
+    font: 500 9.5pt/1.35 var(--sans);
+  }
+  .find b { display: block; font-weight: 800; font-size: 10.5pt; margin-bottom: 0.8mm; }
+
+  .steps { margin-top: 4mm; }
+  .steps ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3.5mm; }
+  .steps li {
+    background: rgba(255, 255, 255, 0.045);
+    border: 0.3mm solid rgba(235, 231, 220, 0.14);
+    border-radius: 2.5mm;
+    padding: 3.2mm 3mm;
+    font: 500 9pt/1.38 var(--sans);
+  }
+  .steps .n {
+    display: inline-block;
+    font: 800 15pt/1 var(--mono);
+    color: var(--red);
+    margin-bottom: 1.5mm;
+  }
+  .steps b { font-weight: 800; }
+  .steps .nv b { color: var(--nv); }
+
+  .nvnote {
+    border: 0.5mm solid rgba(125, 255, 138, 0.55);
+    background: rgba(125, 255, 138, 0.07);
+    border-radius: 2.5mm;
+    padding: 3mm 4mm;
+    font: 500 10pt/1.35 var(--sans);
+  }
+  .nvnote b { color: var(--nv); font-family: var(--mono); letter-spacing: 0.08em; }
+  .rule {
+    margin-top: 0;
+    border: 0.5mm solid var(--red);
+    border-radius: 2.5mm;
+    padding: 3.2mm 4mm;
+    font: 700 12pt/1.3 var(--sans);
+    display: flex;
+    gap: 3mm;
+    align-items: center;
+  }
+  .rule .warn { color: var(--red); font: 800 16pt/1 var(--mono); }
+
+  footer {
+    margin-top: auto;
+    padding-top: 3.5mm;
+    border-top: 0.3mm solid rgba(235, 231, 220, 0.2);
+    display: flex;
+    justify-content: space-between;
+    gap: 6mm;
+    font: 500 8pt/1.45 var(--sans);
+    color: var(--dim);
+  }
+  footer b { color: var(--fg); font-weight: 700; }
+  footer .right { text-align: right; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+
+  <div class="rec-line">
+    <span><span class="dot">●</span> REC 0:00:00</span>
+    <span class="dim">OCT. 14 1998 · 11:47 PM</span>
+  </div>
+
+  <h1><span class="rec">REC</span> — LA<br />ÚLTIMA CINTA</h1>
+  <p class="subtitle">Experiencia de terror 3D en primera persona para celular · Three.js</p>
+  <p class="hook">Banfield, 1998. La familia Carvajal desapareció. En la casa hay algo que <em>sólo se ve a través de la cámara.</em></p>
+
+  <div class="main">
+    <div class="phone"><img src="img/juego-pasillo.jpg" alt="Captura del juego en un celular: el monstruo en el pasillo" /></div>
+    <div class="right-col">
+      <div class="qr-card">
+        <img src="img/qr.svg" alt="Código QR al juego" />
+        <div>
+          <div class="scan">Escaneá con la cámara de tu celular</div>
+          <div class="url" style="margin-top: 3mm">cinta-rec-terror<br />.vercel.app</div>
+          <div class="note">Gratis · sin instalar nada · mejor con auriculares 🎧</div>
+        </div>
+      </div>
+      <div class="rule"><span class="warn">⚠</span> Si lo tenés en el centro del visor, no se mueve. Nunca le des la espalda.</div>
+      <div class="nvnote"><b>NV · VISIÓN NOCTURNA</b> — en la oscuridad total, la cámara ve como con rayos X.</div>
+    </div>
+  </div>
+
+  <section class="find">
+    <h2>QUÉ VAS A ENCONTRAR</h2>
+    <ul>
+      <li><b>Una casa de 1998</b>Casa chorizo argentina con almacén, baldosas calcáreas, mate y radio.</li>
+      <li><b>Tres cintas VHS</b>Las grabaciones del inspector Salgado cuentan qué pasó.</li>
+      <li><b>El Familiar</b>Una cosa sin piel que se acerca cuando dejás de mirarla.</li>
+    </ul>
+  </section>
+
+  <section class="steps">
+    <h2>CÓMO SE JUEGA</h2>
+    <ol>
+      <li><span class="n">1</span><br />Escaneá el QR, ponete <b>auriculares</b> y tocá <b>INICIAR</b>.</li>
+      <li><span class="n">2</span><br />Tocá <b>ACTIVAR CÁMARA</b> y <b>mové el celular</b> para mirar. Círculo izquierdo: caminar.</li>
+      <li><span class="n">3</span><br />Prendé <b>REC</b>: el monstruo sólo aparece en la cámara. <b>Tocá los objetos</b> para agarrarlos.</li>
+      <li class="nv"><span class="n">4</span><br />¿Muy oscuro? <b>NV</b>: visión nocturna, ves como con rayos X. Gasta el doble de batería.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <div><b>Ignacio Bilbao · Lucas Leyes</b><br />Diseño y Programación Web II [M2045] · Comisión DMM4BP<br />Prof. Juan Bautista Carloni · Parcial 2</div>
+    <div class="right">Three.js · HTML5 · CSS3<br />Modelos 3D: Sketchfab (ver créditos en el README)</div>
+  </footer>
+</div>
+</body>
+</html>

@@ -6,7 +6,8 @@ export type LookMode = 'gyro' | 'pointerlock' | 'drag';
 const PITCH_LIMIT = 1.22;
 
 export interface LookCallbacks {
-  tap: () => void;
+  /** Toque o clic para interactuar: con coordenadas de pantalla si fue un toque (para el Raycaster). */
+  tap: (x?: number, y?: number) => void;
   zoom: (delta: number) => void;
   lockLost: () => void;
 }
@@ -178,7 +179,7 @@ export class LookController {
       else this.cb.tap();
       return;
     }
-    if (p && e.type === 'pointerup' && p.moved < 14 && performance.now() - p.t < 450) this.cb.tap();
+    if (p && e.type === 'pointerup' && p.moved < 14 && performance.now() - p.t < 450) this.cb.tap(p.sx, p.sy);
   };
 
   private pinchDist(): number {

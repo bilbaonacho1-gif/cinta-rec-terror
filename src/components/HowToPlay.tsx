@@ -55,7 +55,7 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () =
           <ul>
             <li><b>Mirar:</b> mové el celular (giroscopio). Si no tenés giroscopio, arrastrá el dedo por la pantalla.</li>
             <li><b>Caminar:</b> el círculo de abajo a la izquierda.</li>
-            <li><b>Agarrar / abrir / leer:</b> apuntá al objeto (aparece el texto) y tocá la pantalla o el botón TOCAR.</li>
+            <li><b>Agarrar / abrir / leer:</b> tocá el objeto en la pantalla (o apuntale con el centro y tocá TOCAR).</li>
             <li><b>REC:</b> prende y apaga la cámara · <b>NV:</b> visión nocturna · <b>BAT +:</b> cambiar batería.</li>
             <li><b>T / W:</b> zoom · <b>II:</b> pausa · <b>■ STOP:</b> cortar una cinta.</li>
           </ul>
@@ -63,7 +63,7 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () =
           <ul>
             <li><b>Mirar:</b> mouse (hacé clic en la pantalla para capturarlo).</li>
             <li><b>Caminar:</b> W A S D o flechas.</li>
-            <li><b>Agarrar / abrir / leer:</b> apuntá al objeto y tocá <b>E</b>, espacio o clic.</li>
+            <li><b>Agarrar / abrir / leer:</b> apuntá al objeto con el centro y tocá <b>E</b>, espacio o clic.</li>
             <li><b>C:</b> cámara · <b>N:</b> visión nocturna · <b>B:</b> cambiar batería.</li>
             <li><b>Rueda o Z / X:</b> zoom · <b>Q:</b> cortar una cinta · <b>Esc:</b> pausa.</li>
           </ul>

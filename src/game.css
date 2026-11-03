@@ -1033,3 +1033,73 @@ canvas.game-canvas {
     margin-top: 1.2em;
   }
 }
+
+/* ---------- barra de carga de los modelos 3D ---------- */
+.loadbar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(22px + var(--safe-b));
+  transform: translateX(-50%);
+  width: min(86vw, 420px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'label pct' 'bar bar';
+  gap: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--fg-dim);
+  text-align: left;
+}
+.loadbar span:first-child {
+  grid-area: label;
+}
+.loadbar .pct {
+  grid-area: pct;
+  color: var(--fg);
+}
+.loadbar .bar {
+  grid-area: bar;
+  height: 6px;
+  border: 1px solid rgba(232, 230, 223, 0.45);
+  overflow: hidden;
+}
+.loadbar .bar i {
+  display: block;
+  height: 100%;
+  background: #e33;
+  transition: width 0.25s;
+}
+
+/* medidor de FPS (pausa → MEDIDOR DE FPS, o ?fps en la URL) */
+.fps-meter {
+  position: absolute;
+  top: calc(64px + var(--safe-t));
+  right: calc(18px + var(--safe-r, 0px));
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: #7dff8a;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 7px;
+  pointer-events: none;
+}
+.fps-meter.mid {
+  color: #ffd25a;
+}
+.fps-meter.low {
+  color: #ff5a4a;
+}
+
+/* anillo de selección donde se tocó un objeto (Raycaster) */
+@keyframes tap-ring {
+  from { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+.tap-ring {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  border: 2px solid #e33;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tap-ring 0.5s ease-out forwards;
+}

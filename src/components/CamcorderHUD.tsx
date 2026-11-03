@@ -109,6 +109,12 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
       <div className={`subs ${(playing || ui.radio) && ui.subtitle ? 'on' : ''}`}>{ui.subtitle}</div>
       <div className={`toast ${toastOn ? 'on' : ''}`}>{ui.toast}</div>
       <div className={`message ${msgOn && !playing && !ui.radio ? 'on' : ''}`}>{ui.message}</div>
+      {ui.tapFx && <div key={ui.tapFx.key} className="tap-ring" style={{ left: ui.tapFx.x, top: ui.tapFx.y }} />}
+      {ui.showFps && (
+        <div className={`fps-meter ${ui.fps < 30 ? 'low' : ui.fps < 45 ? 'mid' : ''}`} aria-label="Cuadros por segundo">
+          {ui.fps} FPS
+        </div>
+      )}
       <div className={`gyro-status ${gyroOn ? 'on' : ''}`}>{ui.gyro === 'active' ? 'GYRO: ACTIVE' : 'GYRO: FALLBACK'}</div>
 
       <div className="controls">

@@ -29,6 +29,13 @@ export interface UIState {
   /** La radio del almacén está sonando (muestra subtítulos fuera de las cintas). */
   radio: boolean;
   modelsReady: boolean;
+  /** Progreso de descarga de los assets 3D (0..1). */
+  loadProgress: number;
+  /** Medidor de FPS visible. */
+  showFps: boolean;
+  fps: number;
+  /** Anillo de selección donde se tocó un objeto. */
+  tapFx: { x: number; y: number; key: number } | null;
   /** El botón de visión nocturna titila (está muy oscuro y no se usa). */
   hintNV: boolean;
   recSeconds: number;
@@ -105,6 +112,10 @@ export const store = new Store({
   subtitle: null,
   radio: false,
   modelsReady: false,
+  loadProgress: 0,
+  showFps: typeof location !== 'undefined' && /[?&]fps\b/.test(location.search),
+  fps: 0,
+  tapFx: null,
   hintNV: false,
   recSeconds: 0,
   clock: 23 * 3600 + 47 * 60 + 10,

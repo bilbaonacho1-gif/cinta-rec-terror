@@ -15,6 +15,7 @@ import { ModelKit, loadGLTF } from '../scene/ModelKit';
 import { Director } from '../story/Director';
 import type { InteractiveItem, Phase } from '../types';
 import { Camcorder } from './Camcorder';
+import { finishAsset, trackAsset } from './loading';
 import { Radio } from './Radio';
 import { TapePlayer } from './TapePlayer';
 import { store } from './store';
@@ -69,7 +70,11 @@ export class Engine {
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+    // como pide la consigna: nunca más de 2x (en pantallas 3x se ve igual y cuesta mucho más)
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // sombras optimizadas: un solo spot con mapa de 512 px (ver HouseBuilder.makeShadowLight)
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.domElement.className = 'game-canvas';
     container.prepend(this.renderer.domElement);
@@ -80,7 +85,7 @@ export class Engine {
     this.scene.add(this.camera);
 
     this.look = new LookController(this.renderer.domElement, this.gyro, {
-      tap: () => this.interact(),
+      tap: (x, y) => this.interact(x === undefined || y === undefined ? undefined : { x, y }),
       zoom: (d) => this.zoom(d),
       lockLost: () => {
         if (this.phase === 'playing' && !this.docOpen) this.pause();
@@ -131,23 +136,26 @@ export class Engine {
     const kit = new ModelKit();
     const base = import.meta.env.BASE_URL;
     const urls = (name: string) => [`${base}models/${name}.glb`, `${base}models/${name}.gltf.json`];
-    const results = await Promise.allSettled([kit.loadFirst(urls('desayuno'), 0.085), kit.loadFirst(urls('almacen'))]);
-    for (const r of results) if (r.status === 'rejected') console.warn('Modelo no disponible:', r.reason);
+    // los tres archivos bajan en paralelo; la barra de carga se pesa por tamaño (MB aprox.)
+    const load = async <T>(name: string, mb: number, fn: (p: (e: ProgressEvent) => void) => Promise<T>): Promise<T> => {
+      try {
+        return await fn(trackAsset(name, mb));
+      } finally {
+        finishAsset(name);
+      }
+    };
+    const [desayuno, almacen, crawler] = await Promise.allSettled([
+      load('desayuno', 1.0, (p) => kit.loadFirst(urls('desayuno'), 0.085, p)),
+      load('almacen', 1.6, (p) => kit.loadFirst(urls('almacen'), 1, p)),
+      load('crawler', 1.0, (p) => loadGLTF(urls('crawler'), p)),
+    ]);
+    for (const r of [desayuno, almacen]) if (r.status === 'rejected') console.warn('Modelo no disponible:', r.reason);
     this.house.furnish(kit);
     // el monstruo principal: el crawler sin piel, con sus animaciones
-    try {
-      const crawler = await loadGLTF(urls('crawler'));
-      this.entity.entity.useModel(crawler, 2.1);
-      this.precompile();
-    } catch (e) {
-      console.warn('Monstruo GLB no disponible, se usa la figura procedural:', e);
-    }
-    try {
-      await this.renderer.compileAsync(this.scene, this.camera);
-    } catch {
-      /* se compila al primer cuadro */
-    }
-    store.set({ modelsReady: true });
+    if (crawler.status === 'fulfilled') this.entity.entity.useModel(crawler.value, 2.1);
+    else console.warn('Monstruo GLB no disponible, se usa la figura procedural:', crawler.reason);
+    this.precompile();
+    store.set({ modelsReady: true, loadProgress: 1 });
   }
 
   /** Primer gesto: desbloquear audio (iOS lo exige dentro del click). */
@@ -306,8 +314,17 @@ export class Engine {
     }
   }
 
+  /**
+   * En celulares, el mismo toque que abre un documento o la pregunta de la cinta genera después un "click"
+   * que cae sobre la ventana recién abierta y la cerraría. Se ignoran respuestas en los primeros 450 ms.
+   */
+  private openedAt = 0;
+  private tooSoon(): boolean {
+    return performance.now() - this.openedAt < 450;
+  }
+
   closeDoc(): void {
-    if (!this.docOpen) return;
+    if (!this.docOpen || this.tooSoon()) return;
     this.docOpen = false;
     store.set({ doc: null });
     this.last = performance.now();
@@ -316,6 +333,7 @@ export class Engine {
 
   private showDoc(doc: { text?: string; image?: string; caption?: string }): void {
     this.docOpen = true;
+    this.openedAt = performance.now();
     this.look.exitLock();
     this.audio.play('paper', { bus: 'ui' });
     store.set({ doc });
@@ -323,6 +341,7 @@ export class Engine {
 
   /** Respuesta al encontrar una cinta: verla ahora o guardarla. */
   answerTapePrompt(play: boolean): void {
+    if (this.tooSoon()) return;
     const i = store.get().promptTape;
     store.set({ promptTape: null });
     this.docOpen = false;
@@ -444,9 +463,35 @@ export class Engine {
     return item.label;
   }
 
-  interact(): void {
+  /**
+   * Selección táctil con Raycaster: un rayo desde la cámara por el punto tocado contra los volúmenes
+   * de los objetos (y las paredes/muebles, que tapan). Devuelve el objeto tocado si está al alcance.
+   */
+  private pickAt(x: number, y: number): InteractiveItem | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    this.raycaster.far = 4;
+    const hits = this.raycaster.intersectObjects([...this.house.pickables.children, ...this.house.occluders], false);
+    for (const h of hits) {
+      const item = h.object.userData.item as InteractiveItem | undefined;
+      if (!item) return null; // lo primero que tocó el rayo es una pared o un mueble
+      if (item.collected) continue;
+      return h.distance <= (item.reach ?? 2.2) + 0.6 ? item : null;
+    }
+    return null;
+  }
+
+  interact(at?: { x: number; y: number }): void {
     if (!this.canControl || store.get().promptTape !== null) return;
-    const item = this.nearby;
+    let item = this.nearby;
+    if (at) {
+      const picked = this.pickAt(at.x, at.y);
+      if (picked) {
+        item = picked;
+        store.set({ tapFx: { x: at.x, y: at.y, key: Date.now() } });
+      }
+    }
     if (!item) return;
     this.audio.play('uiClick', { bus: 'ui' });
     const s = store.get();
@@ -458,6 +503,7 @@ export class Engine {
         this.audio.play('pickup');
         const found = [...s.tapesFound];
         found[i] = true;
+        this.openedAt = performance.now();
         store.set({ tapesFound: found, promptTape: i, objective: found.every(Boolean) ? 'Salir por la puerta de la pieza del fondo.' : `Encontrar las cintas (${found.filter(Boolean).length}/3).` });
         store.toast(TAPES_DATA[i].label);
         this.entity.setAggressionFromTapes(found.filter(Boolean).length);
@@ -635,9 +681,12 @@ export class Engine {
     });
   }
 
+  /** Resize: tamaño del canvas, pixelRatio (máx. 2), post-proceso y FOV según la orientación. */
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    if (this.renderer.getPixelRatio() !== dpr) this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     this.post.setSize(w, h, this.renderer.getPixelRatio());
     this.look.setAspect(w / h, this.camera);
@@ -697,21 +746,41 @@ export class Engine {
     this.measure(raw);
   }
 
-  /** Calidad adaptativa: si caen los FPS, baja la resolución interna. */
+  /**
+   * Medidor de FPS (cada 0,5 s, se muestra si está activado) y calidad adaptativa (cada 2 s):
+   * si caen los FPS baja la resolución interna; si aun así no llega a 30, apaga la sombra.
+   */
   private measure(dt: number): void {
     const p = this.perf;
     p.frames++;
     p.time += dt;
+    this.fpsWindow.frames++;
+    this.fpsWindow.time += dt;
+    if (this.fpsWindow.time >= 0.5) {
+      store.set({ fps: Math.round(this.fpsWindow.frames / this.fpsWindow.time) });
+      this.fpsWindow.frames = 0;
+      this.fpsWindow.time = 0;
+    }
     if (p.time < 2) return;
     const fps = p.frames / p.time;
     p.frames = 0;
     p.time = 0;
     if (this.phase !== 'playing') return;
     const s = this.post.renderScale;
+    if (fps < 32 && s <= 0.5 && this.house.shadowLight.castShadow) {
+      this.house.shadowLight.castShadow = false;
+      return;
+    }
     if (fps < 45 && s > 0.5) this.post.renderScale = Math.max(0.5, s - 0.08);
     else if (fps > 58 && s < this.maxScale) this.post.renderScale = Math.min(this.maxScale, s + 0.04);
     else return;
     this.resize();
+  }
+
+  private fpsWindow = { frames: 0, time: 0 };
+
+  toggleFps(): void {
+    store.set({ showFps: !store.get().showFps });
   }
 
   get debugInfo(): Record<string, unknown> {

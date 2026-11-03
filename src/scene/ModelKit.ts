@@ -1,17 +1,18 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadingManager } from '../engine/loading';
 
 /**
  * Piezas sueltas de los modelos GLB (mate, termo, productos del almacén).
  * Cada pieza se guarda con su transformación de mundo, apoyada en y = 0 y centrada en XZ,
- * con materiales Lambert (más baratos y coherentes con el resto de la casa).
+ * con materiales PBR (MeshStandardMaterial) que reciben las luces y sombras de la casa.
  */
 export class ModelKit {
   private parts = new Map<string, THREE.Object3D>();
-  private materials = new Map<THREE.Material, THREE.MeshLambertMaterial>();
+  private materials = new Map<THREE.Material, THREE.MeshStandardMaterial>();
 
-  async load(url: string, scale = 1): Promise<void> {
-    const gltf = await new GLTFLoader().loadAsync(url);
+  async load(url: string, scale = 1, onProgress?: (e: ProgressEvent) => void): Promise<void> {
+    const gltf = await new GLTFLoader(loadingManager).loadAsync(url, onProgress);
     const root = gltf.scene;
     root.updateMatrixWorld(true);
     root.traverse((o) => {
@@ -20,7 +21,10 @@ export class ModelKit {
       o.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
       copy.traverse((c) => {
         const mesh = c as THREE.Mesh;
-        if (mesh.isMesh) mesh.material = this.lambert(mesh.material as THREE.Material);
+        if (mesh.isMesh) {
+          mesh.material = this.pbr(mesh.material as THREE.Material);
+          mesh.castShadow = true;
+        }
       });
       const holder = new THREE.Group();
       holder.add(copy);
@@ -36,11 +40,11 @@ export class ModelKit {
   }
 
   /** Prueba varias URLs en orden (p. ej. .glb y, si el hosting no sirve .glb, la versión .gltf.json). */
-  async loadFirst(urls: string[], scale = 1): Promise<void> {
+  async loadFirst(urls: string[], scale = 1, onProgress?: (e: ProgressEvent) => void): Promise<void> {
     let last: unknown = null;
     for (const url of urls) {
       try {
-        await this.load(url, scale);
+        await this.load(url, scale, onProgress);
         return;
       } catch (e) {
         last = e;
@@ -49,11 +53,12 @@ export class ModelKit {
     throw last;
   }
 
-  private lambert(src: THREE.Material): THREE.MeshLambertMaterial {
+  private pbr(src: THREE.Material): THREE.MeshStandardMaterial {
     let m = this.materials.get(src);
     if (!m) {
       const std = src as THREE.MeshStandardMaterial;
-      m = new THREE.MeshLambertMaterial({ map: std.map ?? null, color: std.color ?? 0xffffff });
+      // PBR sin mapa de entorno: metalness 0 (si no, se ve negro) y rugosidad media para un brillo sutil
+      m = new THREE.MeshStandardMaterial({ map: std.map ?? null, color: std.color ?? 0xffffff, roughness: 0.7, metalness: 0 });
       m.name = `glb:${src.name}`;
       this.materials.set(src, m);
     }
@@ -78,11 +83,11 @@ export class ModelKit {
 }
 
 /** Carga un GLTF completo (con animaciones) probando varias URLs en orden. */
-export async function loadGLTF(urls: string[]): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+export async function loadGLTF(urls: string[], onProgress?: (e: ProgressEvent) => void): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
   let last: unknown = null;
   for (const url of urls) {
     try {
-      const g = await new GLTFLoader().loadAsync(url);
+      const g = await new GLTFLoader(loadingManager).loadAsync(url, onProgress);
       return { scene: g.scene, animations: g.animations };
     } catch (e) {
       last = e;
