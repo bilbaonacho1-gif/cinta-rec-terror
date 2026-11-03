@@ -76,3 +76,17 @@ export class ModelKit {
     return p ? new THREE.Box3().setFromObject(p).getSize(new THREE.Vector3()) : new THREE.Vector3();
   }
 }
+
+/** Carga un GLTF completo (con animaciones) probando varias URLs en orden. */
+export async function loadGLTF(urls: string[]): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+  let last: unknown = null;
+  for (const url of urls) {
+    try {
+      const g = await new GLTFLoader().loadAsync(url);
+      return { scene: g.scene, animations: g.animations };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}

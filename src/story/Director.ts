@@ -25,6 +25,10 @@ export class Director {
   tension = 0.1;
   introDone = false;
   private stalkAt = Infinity;
+  /** Segundos seguidos con la cámara prendida en un lugar muy oscuro sin visión nocturna. */
+  private darkFor = 0;
+  private nvHints = 0;
+  private lastNvHint = -999;
 
   constructor(private g: Engine) {
     this.registerAmbient();
@@ -131,6 +135,7 @@ export class Director {
       });
 
       if (g.time > this.stalkAt) this.wakeEntity(6);
+      this.darknessHint(room);
     }
 
     // retrato del pasillo: a través de la cámara, hay alguien más en la foto
@@ -139,9 +144,32 @@ export class Director {
       const fig = this.introDone && (cam.on || g.tapes.active);
       const mat = (fig ? portrait.userData.figure : portrait.userData.normal) as THREE.Material;
       if (portrait.material !== mat) portrait.material = mat;
+      for (const ph of g.house.floorPhotos) if (ph.material !== mat) ph.material = mat;
     }
 
     this.updateAmbient(room);
+  }
+
+  /** Si está muy oscuro y no se usa la visión nocturna, explicarla (dos veces como mucho) y hacer titilar el botón. */
+  private darknessHint(room: string): void {
+    const g = this.g;
+    const cam = g.camcorder;
+    const p = g.player.position;
+    const lit = g.house.lights.all.some((f) => f.on && f.level > 0.25 && f.position.distanceTo(p) < f.distance * 0.5);
+    const dark = !lit || room === 'shrine';
+    if (cam.on && !cam.nightVision && dark && !g.tapes.active) this.darkFor += 0.2;
+    else this.darkFor = 0;
+    if (cam.nightVision && store.get().hintNV) store.set({ hintNV: false });
+    if (this.darkFor < 2.5 || this.nvHints >= 2 || g.time - this.lastNvHint < 75) return;
+    this.nvHints++;
+    this.lastNvHint = g.time;
+    this.darkFor = 0;
+    store.set({ hintNV: true });
+    store.message(
+      store.get().touch
+        ? 'Está muy oscuro. Tocá NV: la visión nocturna ve en la oscuridad como rayos X (gasta el doble de batería).'
+        : 'Está muy oscuro. Apretá [N]: la visión nocturna ve en la oscuridad como rayos X (gasta el doble de batería).',
+    );
   }
 
   private afterIntro(): void {

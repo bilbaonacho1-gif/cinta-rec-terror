@@ -29,6 +29,8 @@ export interface UIState {
   /** La radio del almacén está sonando (muestra subtítulos fuera de las cintas). */
   radio: boolean;
   modelsReady: boolean;
+  /** El botón de visión nocturna titila (está muy oscuro y no se usa). */
+  hintNV: boolean;
   recSeconds: number;
   clock: number;
   zoom: number;
@@ -103,6 +105,7 @@ export const store = new Store({
   subtitle: null,
   radio: false,
   modelsReady: false,
+  hintNV: false,
   recSeconds: 0,
   clock: 23 * 3600 + 47 * 60 + 10,
   zoom: 1,

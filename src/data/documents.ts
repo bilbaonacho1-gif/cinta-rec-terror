@@ -51,6 +51,9 @@ No te asustes. En el sótano del ingenio vivía algo que
 los peones llamaban el Familiar. Al patrón le daba plata,
 buenas zafras, suerte. Y cada 9 de octubre se cobraba
 un peón. Así fue siempre.
+Los peones decían que no tiene piel. Que camina
+encorvado, con los brazos largos, y que no se mueve
+mientras uno lo mira.
 
 El patrón me lo dejó a mí. Va a vivir en la pieza del fondo,
 como un inquilino. No se lo mira, no se le habla,
@@ -101,8 +104,10 @@ Cientos. Algunas nuevas, otras desteñidas por los años.
 "Contra la envidia", decía la abuela.
 Acá no hay envidia. Acá alguien tenía miedo de lo que dormía adentro.`,
 
-  portraitCaption: 'Familia Carvajal con el abuelo Ramón. Navidad de 1996.',
-  portraitFigureCaption: 'Familia Carvajal con el abuelo Ramón. Navidad de 1996.\n...¿Quién está parado atrás de ellos?',
+  portraitCaption: 'Los Carvajal en Tucumán, 1932. El nene de saco, sentado a la izquierda, es el abuelo Ramón.',
+  portraitFigureCaption: 'Los Carvajal en Tucumán, 1932.\n...¿Qué es eso que asoma atrás del padre? No tiene piel. Y mira a cámara.',
+  floorPhotoCaption: 'La misma foto de 1932, otra vez. Hay copias tiradas por toda la casa, como si alguien las hubiera ido soltando.',
+  floorPhotoFigureCaption: 'La misma foto. Por el visor, la cosa sin piel ya no está atrás del padre:\nestá más adelante. Más cerca de la cámara.',
 };
 
 export type DocId = keyof typeof DOCUMENTS;

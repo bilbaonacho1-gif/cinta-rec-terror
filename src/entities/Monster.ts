@@ -128,6 +128,16 @@ export class MonsterEntity {
   private headTwitch = 0;
   private skin: THREE.MeshStandardMaterial;
   poseName: MonsterPose = 'stand';
+  /** Modelo GLB animado (el crawler sin piel). Si no carga, queda la figura procedural. */
+  private model: THREE.Object3D | null = null;
+  private mixer: THREE.AnimationMixer | null = null;
+  private actions = new Map<string, THREE.AnimationAction>();
+  private current: THREE.AnimationAction | null = null;
+  private modelMats: THREE.MeshStandardMaterial[] = [];
+  private lastPos = new THREE.Vector3();
+  private movedAt = -10;
+  private clock = 0;
+  private glow = 1;
 
   constructor() {
     const rnd = seeded(66);
@@ -335,9 +345,62 @@ export class MonsterEntity {
     return m;
   }
 
+  /**
+   * Reemplaza la figura procedural por un modelo animado (idle / walk / attack).
+   * El esqueleto procedural queda invisible: sigue sirviendo de referencia para las sondas de visibilidad.
+   */
+  useModel(gltf: { scene: THREE.Object3D; animations: THREE.AnimationClip[] }, height = 2.1): void {
+    const model = gltf.scene;
+    const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+    model.scale.setScalar(height / Math.max(0.01, size.y));
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.frustumCulled = false;
+      const src = mesh.material as THREE.MeshStandardMaterial;
+      const mat = new THREE.MeshStandardMaterial({ map: src.map ?? null, color: 0xffffff, roughness: 0.85, metalness: 0, emissiveMap: src.map ?? null });
+      mesh.material = mat;
+      this.modelMats.push(mat);
+    });
+    for (const child of [...this.root.children]) child.visible = false;
+    this.root.add(model);
+    this.model = model;
+    this.mixer = new THREE.AnimationMixer(model);
+    for (const clip of gltf.animations) this.actions.set(clip.name, this.mixer.clipAction(clip));
+    const attack = this.actions.get('attack');
+    if (attack) {
+      attack.setLoop(THREE.LoopOnce, 1);
+      attack.clampWhenFinished = true;
+    }
+    this.current = null;
+    this.setPose(this.poseName);
+    this.setSkinGlow(this.glow);
+  }
+
+  get hasModel(): boolean {
+    return !!this.model;
+  }
+
+  private play(name: string, fade = 0.2): void {
+    const next = this.actions.get(name) ?? this.actions.get('idle');
+    if (!next || next === this.current) return;
+    next.reset();
+    if (name === 'idle') next.time = rand(0, next.getClip().duration);
+    next.play();
+    if (this.current) next.crossFadeFrom(this.current, fade, false);
+    this.current = next;
+    this.mixer?.update(0);
+  }
+
+  /** Animación según la pose pedida por el guion: las de ataque usan 'attack', el resto 'idle'. */
+  private clipFor(name: MonsterPose): string {
+    return name === 'reach' || name === 'close' ? 'attack' : 'idle';
+  }
+
   setPose(name: MonsterPose): void {
     this.poseName = name;
     this.body.applyPose(MONSTER_POSES[name]);
+    if (this.mixer) this.play(this.clipFor(name), 0.12);
   }
 
   /** Coloca a la entidad mirando hacia un punto (sólo gira en Y). */
@@ -353,6 +416,18 @@ export class MonsterEntity {
    * (periferia de la imagen). Mientras se lo mira, queda completamente inmóvil.
    */
   animate(dt: number, time: number, frozen: boolean): void {
+    if (this.mixer) {
+      // camina mientras se está desplazando; quieto, vuelve a la pose del guion
+      this.clock += dt;
+      const p = this.root.position;
+      if (p.distanceToSquared(this.lastPos) > 0.0004) this.movedAt = this.clock;
+      this.lastPos.copy(p);
+      const moving = this.clock - this.movedAt < 0.45;
+      const want = moving && this.clipFor(this.poseName) !== 'attack' ? 'walk' : this.clipFor(this.poseName);
+      if (this.current !== this.actions.get(want)) this.play(want);
+      // regla del juego: mientras lo mirás no se mueve ni un músculo
+      if (!frozen) this.mixer.update(dt);
+    }
     if (frozen) return;
     this.headTwitch -= dt;
     if (this.headTwitch <= 0) {
@@ -367,6 +442,8 @@ export class MonsterEntity {
   }
 
   setSkinGlow(v: number): void {
+    this.glow = v;
     this.skin.emissive.setRGB(0.086 * v, 0.078 * v, 0.06 * v);
+    for (const m of this.modelMats) m.emissive.setRGB(0.16 * v, 0.13 * v, 0.12 * v);
   }
 }

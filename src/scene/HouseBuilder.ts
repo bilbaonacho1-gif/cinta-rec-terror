@@ -41,6 +41,10 @@ export class HouseBuilder {
   private animated: ((dt: number, t: number) => void)[] = [];
   private pendulum: THREE.Object3D | null = null;
   clockRunning = true;
+  /** Fotos de la familia tiradas en el piso: con la cámara muestran lo mismo que el retrato. */
+  readonly floorPhotos: THREE.Mesh[] = [];
+  photoNormal: THREE.Material | null = null;
+  photoFigure: THREE.Material | null = null;
 
   constructor(scene: THREE.Scene) {
     this.m = createMaterials(getTextures());
@@ -142,15 +146,34 @@ export class HouseBuilder {
     // retratos: uno cambia cuando se lo mira a través de la cámara
     const normal = lam(toTexture(familyPhoto('normal'), { repeat: false }));
     const figure = lam(toTexture(familyPhoto('figure'), { repeat: false }));
-    const photo = P.picture(m, 0.62, 0.46, normal);
+    const photo = P.picture(m, 0.58, 0.5, normal);
     this.dynamic(photo.group, -1.415, 1.62, -2.5, Math.PI / 2);
     photo.image.userData.normal = normal;
     photo.image.userData.figure = figure;
     this.refs.portrait = photo.image;
     this.item({ id: 'portrait', kind: 'photo', label: 'FOTOGRAFÍA', position: v(-1.4, 1.62, -2.5), reach: 2.0 });
 
-    const p2 = P.picture(m, 0.5, 0.38, lam(toTexture(familyPhoto('normal'), { repeat: false })));
+    const p2 = P.picture(m, 0.46, 0.4, normal);
     this.place(p2.group, 1.415, 1.6, -13, -Math.PI / 2);
+
+    // copias de la misma foto tiradas por toda la casa (alguien las fue soltando)
+    this.photoNormal = normal;
+    this.photoFigure = figure;
+    for (const [id, x, z, r] of [
+      ['floorphoto-hall', 0.35, -7.4, 0.5],
+      ['floorphoto-hall2', -0.5, -15.2, -1.1],
+      ['floorphoto-living', 3.3, -4.0, 2.2],
+      ['floorphoto-study', -4.2, -8.2, -0.4],
+      ['floorphoto-store', -3.1, -2.6, 1.3],
+      ['floorphoto-shrine', 1.6, -20.4, 0.2],
+    ] as const) {
+      const ph = planeMesh(0.3, 0.258, normal, 0, 0, 0);
+      ph.rotation.set(-Math.PI / 2, 0, r);
+      ph.position.set(x, 0.022, z); // un poco más arriba que el piso: si no, el piso la tapa a lo lejos
+      this.group.add(ph);
+      this.floorPhotos.push(ph);
+      this.item({ id, kind: 'photo', label: 'FOTO EN EL PISO', position: v(x, 0.05, z), reach: 2.1 });
+    }
 
     // almanaque de la carnicería: todos los 9 de octubre marcados
     const alm = planeMesh(0.3, 0.45, lam(toTexture(almanac(), { repeat: false })), 0, 0, 0);

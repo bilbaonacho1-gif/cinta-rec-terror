@@ -2,10 +2,20 @@ import { TAPES_DATA } from '../data/tapesData';
 import type { Engine } from '../engine/Engine';
 import { Credits } from './Screens';
 import { useUI } from '../engine/store';
+import { useState } from 'react';
+import { HowToPlay } from './HowToPlay';
 
 /** Pausa + inventario mínimo (cámara, baterías, cintas) + ajustes. */
 export function PauseMenu({ engine }: { engine: Engine }) {
   const ui = useUI();
+  const [help, setHelp] = useState(false);
+  if (help) {
+    return (
+      <div className="screen menu">
+        <HowToPlay onClose={() => setHelp(false)} closeLabel="VOLVER" />
+      </div>
+    );
+  }
   return (
     <div className="screen menu">
       <h2>PAUSA</h2>
@@ -73,6 +83,9 @@ export function PauseMenu({ engine }: { engine: Engine }) {
       <div className="actions">
         <button type="button" onClick={() => engine.resume()}>
           CONTINUAR
+        </button>
+        <button type="button" onClick={() => setHelp(true)}>
+          CÓMO SE JUEGA
         </button>
         <button type="button" onClick={() => location.reload()}>
           REINICIAR

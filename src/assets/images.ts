@@ -114,13 +114,98 @@ function sepiaFinish(c: Canvas2D, border = 22): void {
   ctx.strokeRect(border, border, w - border * 2, h - border * 2);
 }
 
+
+/** Foto real de la familia (public/img/familia.webp). Se precarga antes de construir la casa. */
+let familyImage: HTMLImageElement | null = null;
+
+export function preloadImages(): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      familyImage = img;
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = `${import.meta.env.BASE_URL}img/familia.webp`;
+  });
+}
+
+/** Lo que aparece en la foto vista por la cámara: algo sin piel que asoma por detrás del hombro del padre. */
+function drawPhotoCreature(c: Canvas2D, sx: number, sy: number): void {
+  const { ctx } = c;
+  ctx.save();
+  ctx.scale(sx, sy);
+  ctx.filter = 'blur(0.7px)';
+  const flesh = 'rgba(112,62,48,0.93)';
+  const fleshLight = 'rgba(158,104,84,0.85)';
+  const dark = 'rgba(22,8,6,0.96)';
+  // cuello flaco que sale de atrás del padre, inclinado hacia la cámara
+  ctx.fillStyle = flesh;
+  ctx.beginPath();
+  ctx.moveTo(470, 168);
+  ctx.quadraticCurveTo(474, 140, 486, 124);
+  ctx.lineTo(499, 128);
+  ctx.quadraticCurveTo(492, 150, 492, 172);
+  ctx.closePath();
+  ctx.fill();
+  // cabeza chica, pelada y ladeada
+  ctx.beginPath();
+  ctx.ellipse(489, 106, 15, 21, 0.45, 0, Math.PI * 2);
+  ctx.fill();
+  // fibras de músculo
+  ctx.strokeStyle = fleshLight;
+  ctx.lineWidth = 1.3;
+  for (let i = 0; i < 7; i++) {
+    ctx.beginPath();
+    ctx.moveTo(478 + i * 3.5, 88 + (i % 2) * 3);
+    ctx.quadraticCurveTo(480 + i * 3, 104, 478 + i * 3.5, 124);
+    ctx.stroke();
+  }
+  // cuencas hundidas y una boca finita, abierta de lado
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.ellipse(484, 101, 3.2, 4, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(495, 104, 3.2, 4, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(481, 115);
+  ctx.quadraticCurveTo(489, 121, 497, 116);
+  ctx.quadraticCurveTo(489, 118, 481, 115);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(214,196,160,0.8)';
+  for (let t = 0; t < 5; t++) ctx.fillRect(483 + t * 3, 116 + (t % 2), 1.2, 1.6);
+  // dedos larguísimos sobre el hombro del padre
+  ctx.strokeStyle = flesh;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3;
+  for (let f = 0; f < 4; f++) {
+    ctx.beginPath();
+    ctx.moveTo(472, 158 + f * 3);
+    ctx.quadraticCurveTo(454 - f * 4, 150 + f * 5, 448 - f * 5, 176 + f * 6);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export type FamilyVariant = 'normal' | 'figure';
 
-/** Retrato de la familia Ledesma en el pasillo de la casa. La variante 'figure' muestra a alguien más. */
+/** Retrato de la familia Carvajal. La variante 'figure' (vista por la cámara) muestra a alguien más. */
 export function familyPhoto(variant: FamilyVariant): Canvas2D {
+  if (familyImage) {
+    const w = 512;
+    const h = Math.round((w * familyImage.naturalHeight) / familyImage.naturalWidth);
+    const c = makeCanvas(w, h, 777);
+    c.ctx.drawImage(familyImage, 0, 0, w, h);
+    if (variant === 'figure') drawPhotoCreature(c, w / 640, h / 550);
+    sepiaFinish(c, 12);
+    c.ctx.fillStyle = withAlpha('#3a2a14', 0.65);
+    c.ctx.font = 'italic 14px serif';
+    c.ctx.fillText('Los Carvajal — Tucumán, 1932', 26, h - 22);
+    return c;
+  }
+  // sin la foto (no cargó): retrato dibujado
   const c = makeCanvas(512, 384, 777);
   const { ctx, w, h, rnd } = c;
-  // fondo: pasillo con puerta al fondo
   ctx.fillStyle = '#6a6256';
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#4a4238';
@@ -130,15 +215,13 @@ export function familyPhoto(variant: FamilyVariant): Canvas2D {
   ctx.fillStyle = '#3a342a';
   ctx.fillRect(0, h * 0.72, w, h * 0.28);
   if (variant === 'figure') drawTallFigure(ctx, w * 0.5, h * 0.72, h * 0.62, 0.9);
-  // familia: padre, madre, hija
   person(ctx, w * 0.3, h * 0.98, h * 0.7, w * 0.2, '#2e261c', rnd);
   person(ctx, w * 0.68, h * 0.98, h * 0.64, w * 0.19, '#3e3226', rnd);
   person(ctx, w * 0.5, h * 0.98, h * 0.4, w * 0.13, '#5a4a3a', rnd);
   sepiaFinish(c);
-  // anotación al dorso filtrada
   ctx.fillStyle = withAlpha('#3a2a14', 0.6);
   ctx.font = 'italic 15px serif';
-  ctx.fillText('Familia Carvajal — 1997', 34, h - 30);
+  ctx.fillText('Los Carvajal — Tucumán, 1932', 34, h - 30);
   return c;
 }
 

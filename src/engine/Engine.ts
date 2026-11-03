@@ -11,7 +11,7 @@ import { TAPES_DATA } from '../data/tapesData';
 import { PostFX } from '../effects/PostFX';
 import { EntitySystem } from '../scene/EntitySystem';
 import { HouseBuilder, SPAWN } from '../scene/HouseBuilder';
-import { ModelKit } from '../scene/ModelKit';
+import { ModelKit, loadGLTF } from '../scene/ModelKit';
 import { Director } from '../story/Director';
 import type { InteractiveItem, Phase } from '../types';
 import { Camcorder } from './Camcorder';
@@ -104,6 +104,7 @@ export class Engine {
     this.entity.onFirstSeen = () => {
       this.audio.play('swell', { duration: 6, volume: 0.6 });
       this.director.setTension(0.3);
+      store.message('¡Ahí está! No le saques la vista: mientras esté en el centro del visor, no se mueve.');
     };
     // baldosas y cemento suenan distinto que el parquet del living y el escritorio
     this.player.onStep = () => {
@@ -133,6 +134,14 @@ export class Engine {
     const results = await Promise.allSettled([kit.loadFirst(urls('desayuno'), 0.085), kit.loadFirst(urls('almacen'))]);
     for (const r of results) if (r.status === 'rejected') console.warn('Modelo no disponible:', r.reason);
     this.house.furnish(kit);
+    // el monstruo principal: el crawler sin piel, con sus animaciones
+    try {
+      const crawler = await loadGLTF(urls('crawler'));
+      this.entity.entity.useModel(crawler, 2.1);
+      this.precompile();
+    } catch (e) {
+      console.warn('Monstruo GLB no disponible, se usa la figura procedural:', e);
+    }
     try {
       await this.renderer.compileAsync(this.scene, this.camera);
     } catch {
@@ -212,8 +221,9 @@ export class Engine {
     if (!this.canControl) return;
     const wasOn = this.camcorder.nightVision;
     this.camcorder.setNightVision(!wasOn);
+    if (this.camcorder.nightVision) store.set({ hintNV: false });
     if (!wasOn && this.camcorder.nightVision && this.director.firstTime('nvHint')) {
-      store.message('VISIÓN NOCTURNA: ve en la oscuridad, pero gasta el doble de batería.');
+      store.message('VISIÓN NOCTURNA ("rayos X"): ves en la oscuridad total, pero gasta el doble de batería. Apagala cuando haya luz.');
     }
     this.syncUI();
   }
@@ -475,7 +485,9 @@ export class Engine {
         break;
       case 'photo': {
         const fig = this.director.introDone && this.camcorder.on;
-        this.showDoc({ image: familyPhoto(fig ? 'figure' : 'normal').canvas.toDataURL('image/jpeg', 0.9), caption: fig ? DOCUMENTS.portraitFigureCaption : DOCUMENTS.portraitCaption });
+        const floor = item.id.startsWith('floorphoto');
+        const caption = floor ? (fig ? DOCUMENTS.floorPhotoFigureCaption : DOCUMENTS.floorPhotoCaption) : fig ? DOCUMENTS.portraitFigureCaption : DOCUMENTS.portraitCaption;
+        this.showDoc({ image: familyPhoto(fig ? 'figure' : 'normal').canvas.toDataURL('image/jpeg', 0.9), caption });
         break;
       }
       case 'door':
@@ -650,6 +662,9 @@ export class Engine {
       if (this.phase === 'playing') {
         this.entity.update(dt, this.time, this.camera, this.camcorder.on, this.player.position);
         this.director.update(dt);
+      } else if (this.entity.mode === 'actor' && this.entity.present) {
+        // cintas, captura y final: el monstruo sigue animado aunque el guion lo controle
+        this.entity.entity.animate(dt, this.time, false);
       }
       this.tapes.update(dt);
       this.camcorder.proximity = this.entity.present && this.entity.mode !== 'actor' ? this.entity.proximity : 0;

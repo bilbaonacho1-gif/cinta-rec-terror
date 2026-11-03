@@ -251,7 +251,10 @@ export class EntitySystem {
   }
 
   update(dt: number, time: number, camera: THREE.PerspectiveCamera, cameraOn: boolean, playerEye: THREE.Vector3): void {
-    if (this.mode === 'actor') return;
+    if (this.mode === 'actor') {
+      if (this.present) this.entity.animate(dt, time, false);
+      return;
+    }
     const playerFloor = playerEye.clone().setY(0);
     this.cooldown -= dt;
 

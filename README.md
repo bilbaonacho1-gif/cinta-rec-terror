@@ -35,9 +35,16 @@ Para probar el giroscopio en el celular hace falta HTTPS: `npm run dev:https` y 
 El repo ya está listo (`vercel.json`): en https://vercel.com/new importá este repositorio de GitHub y tocá
 **Deploy**. Vercel detecta Vite solo (build `npm run build`, salida `dist`). Cada push a `main` vuelve a publicar.
 
+## Cómo se juega
+
+Antes de empezar aparece la pantalla **"Cómo se juega"** (también está en la pausa) con el objetivo, la regla
+del monstruo, la visión nocturna, la batería y los controles de celular o de compu.
+
 ## Reglas
 
-- A simple vista la casa parece vacía. **El Familiar sólo se ve a través de la cámara** (REC).
+- A simple vista la casa parece vacía. **El Familiar (una cosa sin piel, encorvada) sólo se ve a través de la cámara** (REC).
+- **Visión nocturna ("rayos X")**: con NV / [N] la cámara ve en la oscuridad total. Gasta el doble de batería.
+  Cuando está muy oscuro el botón NV titila y el juego te lo recuerda.
 - **No se mueve mientras está en el centro del visor.** Cuando apartás la vista o apagás la cámara, avanza.
 - La batería arranca en 87%, baja con la cámara encendida y el **doble** con visión nocturna.
   Hay tres packs de +20%. En 0% la cámara se apaga y quedás a ciegas.
@@ -73,7 +80,9 @@ El repo ya está listo (`vercel.json`): en https://vercel.com/new importá este 
   interferencias, batería que cae) y un final con giro.
 - Audio 100% sintetizado y espacializado.
 
-## Créditos de modelos 3D (CC BY 4.0)
+## Créditos de modelos 3D
+
+- «Terror Engine - Skinless Crawler» de JuanCarlosOsanteHernandez (**CC BY-NC 4.0, uso no comercial**) — https://sketchfab.com/3d-models/terror-engine-skinless-crawler-22e900c82b194a03bcba20c7765dadee
 
 - «Breakfast (Argentina edition)» de Drawnah — https://sketchfab.com/3d-models/breakfast-argentina-edition-68489719319b4aa2b8d62b10c755d0db
 - «Food Collection - Game Ready» de Melon Polygons — https://sketchfab.com/3d-models/food-collection-game-ready-969b4e6ef7444650ba8a22a46d57ff43

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Engine } from '../engine/Engine';
+import { HowToPlay } from './HowToPlay';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-type Step = 'lines' | 'logo' | 'phones' | 'activate' | 'done';
+type Step = 'lines' | 'logo' | 'phones' | 'help' | 'activate' | 'done';
 
 const LINES = [
   'BANFIELD, PROVINCIA DE BUENOS AIRES. OCTUBRE DE 1998.',
@@ -47,8 +48,8 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
     await engine.unlockAudio();
     setBusy(false);
     setStep('phones');
-    await wait(2800);
-    setStep('activate');
+    await wait(2600);
+    setStep('help');
   };
 
   const activate = async () => {
@@ -76,6 +77,7 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
         </>
       )}
       {step === 'phones' && <div className="intro-line on">Ponete auriculares.</div>}
+      {step === 'help' && <HowToPlay onClose={() => setStep('activate')} />}
       {step === 'activate' && (
         <>
           <div className="intro-line on">Mové el celular para mirar alrededor.</div>

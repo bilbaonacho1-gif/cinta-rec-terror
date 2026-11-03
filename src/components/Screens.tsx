@@ -27,7 +27,7 @@ function useReveal(count: number, delays: number[]): number {
 export function Credits() {
   return (
     <div className="credits">
-      Modelos 3D (CC BY 4.0): «Breakfast (Argentina edition)» de Drawnah · «Food Collection - Game Ready» de Melon Polygons — Sketchfab.
+      Modelos 3D de Sketchfab: «Terror Engine - Skinless Crawler» de JuanCarlosOsanteHernandez (CC BY-NC 4.0) · «Breakfast (Argentina edition)» de Drawnah (CC BY 4.0) · «Food Collection - Game Ready» de Melon Polygons (CC BY 4.0).
     </div>
   );
 }

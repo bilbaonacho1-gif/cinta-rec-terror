@@ -116,7 +116,7 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
         <button type="button" className={`btn btn-rec ${free ? 'show' : ''} ${ui.cameraOn ? 'active' : ''}`} onPointerDown={press(() => engine.toggleCamera())}>
           <span className="dot">●</span> REC
         </button>
-        <button type="button" className={`btn btn-nv ${free ? 'show' : ''} ${ui.nightVision ? 'active' : ''}`} onPointerDown={press(() => engine.toggleNightVision())}>
+        <button type="button" className={`btn btn-nv ${free ? 'show' : ''} ${ui.nightVision ? 'active' : ''} ${ui.hintNV && !ui.nightVision ? 'pulse' : ''}`} onPointerDown={press(() => engine.toggleNightVision())}>
           NV
         </button>
         <button type="button" className={`btn btn-bat ${free && ui.batteries > 0 ? 'show' : ''}`} onPointerDown={press(() => engine.useBattery())}>
