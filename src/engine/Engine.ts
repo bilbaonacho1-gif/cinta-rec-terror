@@ -486,7 +486,7 @@ export class Engine {
     this.entity.reset();
     this.entity.aggression = cp.aggression;
     this.entity.entity.setSkinGlow(1);
-    if (this.director.introDone || cp.found.some(Boolean)) this.entity.startStalking(12);
+    if (this.director.introDone || cp.found.some(Boolean)) this.entity.startStalking(9);
     this.audio.restoreAmbience();
     this.audio.setVolume(store.get().volume);
     this.phase = 'playing';

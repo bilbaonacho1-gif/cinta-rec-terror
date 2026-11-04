@@ -109,12 +109,13 @@ es Three.js puro en clases TypeScript, que se compilan a JavaScript ES2022."
 
 ## 8 bis. Monstruo, escondites, sustos y tutorial
 
-- **IA** (`EntitySystem.updateHunt`): *roam* (va hacia donde cree que estás), *chase* (te ve: raycast desde su
-  cabeza hasta tus ojos, hasta 11 m), *search* (llega al último lugar donde te vio y mira alrededor) y *leave* (se
+- **IA** (`EntitySystem.updateHunt`): *roam* (va hacia donde cree que estás, y si te oye caminar cerca va derecho
+  al ruido), *chase* (te ve: raycast desde su cabeza hasta tus ojos, hasta 15 m; corre casi tan rápido como vos), *search* (llega al último lugar donde te vio y mira alrededor) y *leave* (se
   aleja y desaparece). Camina con `walk()`: sigue la ruta de la red de puntos y suena un paso cada ~0,7 s.
 - **Escondites** (`Engine.enterHide`): la cámara pasa abajo de la cama o detrás de la rendija del ropero (con un
   overlay CSS). `setPlayerHidden()` decide si te vio entrar: si te estaba persiguiendo de cerca y con línea de
-  visión, va directo al escondite; si no, busca y se va.
+  visión, va directo al escondite; si no, busca y, si quedó cerca, a veces revisa el escondite y te encuentra
+  (más probable con cada cinta). Si no, se va.
 - **Cinemática** (`Engine.catchCinematic`): mientras dura, una función por tiempo pisa la posición y orientación de
   la cámara después del `LookController`; apunta a la posición real del hueso de la cabeza (`Monster.headWorld`).
 - **Sonido de terror**: `stinger` cuando vuelve a aparecer en el visor, loop `chase` según la distancia, `suspense`

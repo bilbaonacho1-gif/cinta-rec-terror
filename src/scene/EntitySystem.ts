@@ -9,8 +9,8 @@ export type EntityMode = 'dormant' | 'intro' | 'stalking' | 'actor';
 export type EntityState = 'HIDDEN' | 'IDLE' | 'OBSERVED' | 'MOVING' | 'NEAR' | 'ATTACK' | 'DISAPPEAR';
 
 /** Zona central del visor donde la entidad se considera observada (NDC). */
-const FOCUS_X = 0.72;
-const FOCUS_Y = 0.82;
+const FOCUS_X = 0.55;
+const FOCUS_Y = 0.7;
 
 /**
  * La entidad de la casa Carvajal.
@@ -30,7 +30,7 @@ export class EntitySystem {
   distance = 99;
   angle = 180;
   proximity = 0;
-  aggression = 0.2;
+  aggression = 0.35;
   unobserved = 0;
   node: string | null = null;
   private observedFor = 0;
@@ -58,6 +58,8 @@ export class EntitySystem {
   private stepTimer = 0;
   private lastPos = new THREE.Vector3();
   private playerHidden = false;
+  /** Para oírte caminar: dónde estabas en la última percepción. */
+  private heardFrom = new THREE.Vector3();
   private sawHide = false;
   private canSeePlayer = false;
   private outOfFrameFor = 99;
@@ -80,7 +82,7 @@ export class EntitySystem {
 
   // ------------------------------------------------------------------ API
   setAggressionFromTapes(found: number): void {
-    this.aggression = clamp(0.2 + found * 0.26, 0, 1);
+    this.aggression = clamp(0.35 + found * 0.25, 0, 1);
   }
 
   /** Primera aparición: al fondo del pasillo, sin susto. */
@@ -97,7 +99,7 @@ export class EntitySystem {
    */
   setPlayerHidden(hidden: boolean): void {
     this.playerHidden = hidden;
-    this.sawHide = hidden && this.present && this.mode === 'stalking' && this.hunt === 'chase' && this.canSeePlayer && this.distance < 4.5;
+    this.sawHide = hidden && this.present && this.mode === 'stalking' && this.hunt === 'chase' && this.canSeePlayer && this.distance < 7;
   }
 
   startStalking(cooldown = 12): void {
@@ -110,7 +112,7 @@ export class EntitySystem {
     this.vanish(false);
     this.mode = 'dormant';
     this.everSeen = false;
-    this.aggression = 0.2;
+    this.aggression = 0.35;
   }
 
   /** Para cinemáticas (cintas, final): la entidad queda bajo control del guion. */
@@ -405,18 +407,19 @@ export class EntitySystem {
     this.route.push(this.target.clone());
   }
 
-  /** ¿Te ve? (línea de visión desde la cabeza, hasta 11 m, si no estás escondido) */
+  /** ¿Te ve? (línea de visión desde la cabeza, hasta 15 m, si no estás escondido) */
   private perceive(playerEye: THREE.Vector3): boolean {
     if (this.playerHidden) return this.sawHide;
     const head = this.entity.root.position.clone().setY(1.8);
-    if (head.distanceTo(playerEye) > 11) return false;
+    if (head.distanceTo(playerEye) > 15) return false;
     return this.lineOfSight(head, playerEye);
   }
 
   private speed(): number {
-    if (this.hunt === 'chase') return 1.1 + this.aggression * 0.7;
-    if (this.hunt === 'leave') return 1.0;
-    return 0.75 + this.aggression * 0.3;
+    // persiguiendo es casi tan rápido como vos (y más rápido con las últimas cintas)
+    if (this.hunt === 'chase') return 1.5 + this.aggression * 0.8;
+    if (this.hunt === 'leave') return 1.1;
+    return 0.95 + this.aggression * 0.45;
   }
 
   private updateHunt(dt: number, camera: THREE.PerspectiveCamera, cameraOn: boolean, playerEye: THREE.Vector3, playerFloor: THREE.Vector3): void {
@@ -427,23 +430,36 @@ export class EntitySystem {
       this.perceiveTimer = 0.25;
       this.canSeePlayer = this.perceive(playerEye);
       if (this.canSeePlayer && this.hunt !== 'leave') {
-        if (this.hunt !== 'chase') this.huntTimer = 0;
+        if (this.hunt !== 'chase') {
+          this.huntTimer = 0;
+          this.repathTimer = 0; // recalcular la ruta ya, hacia vos
+        }
         this.hunt = 'chase';
         this.lastKnown.copy(playerFloor);
         this.lostTimer = 0;
       } else if (this.hunt === 'chase') {
         this.lostTimer += 0.25;
-        if (this.lostTimer > 2.5) {
+        if (this.lostTimer > 4) {
           // te perdió: va a buscarte al último lugar donde te vio
           this.hunt = 'search';
           this.huntTimer = 0;
           this.setTarget(this.lastKnown);
         }
+      } else if (this.hunt !== 'leave' && !this.playerHidden) {
+        // te oye caminar aunque no te vea: va derecho al ruido
+        const walking = playerFloor.distanceTo(this.heardFrom) / 0.25 > 0.9;
+        if (walking && this.distance < 7 + this.aggression * 4) {
+          this.hunt = 'roam';
+          this.huntTimer = 0;
+          this.lastKnown.copy(playerFloor);
+          this.setTarget(playerFloor);
+        }
       }
+      this.heardFrom.copy(playerFloor);
     }
 
     // mirarlo mucho tiempo de lejos lo espanta (cuando dejás de apuntarle se va)
-    if (this.stareTotal > 9 && this.distance > 5 && this.hunt !== 'leave') {
+    if (this.stareTotal > 18 && this.distance > 7 && this.hunt !== 'leave') {
       this.startLeave(camera, cameraOn, playerFloor);
       this.stareTotal = 0;
     }
@@ -453,7 +469,7 @@ export class EntitySystem {
       this.repathTimer -= dt;
       if (this.repathTimer <= 0) {
         this.target.copy(this.lastKnown);
-        this.repathTimer = 0.8;
+        this.repathTimer = 0.5;
         this.repath();
       }
     } else if (this.repathTimer <= 0) {
@@ -464,8 +480,8 @@ export class EntitySystem {
     // te alcanzó
     const dist = this.distance;
     const catchable = !this.playerHidden || this.sawHide;
-    if (catchable && dist < 1.15) {
-      if (this.unobserved > 0.35) this.attack();
+    if (catchable && dist < 1.3) {
+      if (this.unobserved > 0.2) this.attack();
       return;
     }
 
@@ -484,14 +500,20 @@ export class EntitySystem {
     } else if (this.hunt === 'search') {
       // mira alrededor
       this.entity.root.rotation.y += dt * 1.6;
-      if (this.huntTimer > 5) {
-        if (this.playerHidden) this.startLeave(camera, cameraOn, playerFloor);
+      if (this.huntTimer > 7) {
+        // revisa el escondite si quedó cerca: a veces te encuentra
+        if (this.playerHidden && dist < 2.6 && chance(0.25 + this.aggression * 0.35)) {
+          this.sawHide = true;
+          this.hunt = 'chase';
+          this.lastKnown.copy(playerFloor);
+          this.repathTimer = 0;
+        } else if (this.playerHidden) this.startLeave(camera, cameraOn, playerFloor);
         else this.beginRoam(playerFloor);
       }
     } else if (this.hunt === 'leave') {
       if (!this.pointInView(this.entity.root.position, camera, cameraOn)) {
         this.vanish(false);
-        this.cooldown = rand(10, 18) - this.aggression * 6;
+        this.cooldown = rand(6, 11) - this.aggression * 4;
       }
     }
   }
