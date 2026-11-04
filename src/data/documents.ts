@@ -98,6 +98,16 @@ La yerba todavía está húmeda.
 El agua del termo está helada.
 Al lado, en un papelito: "lo calenté hace cinco minutos".`,
 
+  drawing: `Un dibujo con crayones, pegado con cinta scotch a la altura de un nene.
+Una casa, cuatro personas de palito y, al lado de la tele,
+una figura larga y roja, sin cara.
+
+Arriba, con letra de Martín (9 años):
+"EL SEÑOR DE LA TELE"
+"no le gusta que lo miren"
+
+Atrás, en lápiz: "si viene, abajo de la cama no te ve".`,
+
   ribbons: `Cintitas rojas atadas al marco de la pieza del fondo.
 Cientos. Algunas nuevas, otras desteñidas por los años.
 

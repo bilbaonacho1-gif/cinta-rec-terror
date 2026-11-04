@@ -9,6 +9,7 @@ hay algo que **sólo se ve a través de la cámara**.
 - 🖼️ **Afiche A4 con el QR:** [`entrega/afiche-A4.png`](entrega/afiche-A4.png) (300 dpi) · [PDF](entrega/afiche-A4.pdf)
 - 🧱 **Mockup en contexto:** [`entrega/mockup.png`](entrega/mockup.png)
 - 🎤 **Guía para la defensa:** [`docs/DEFENSA.md`](docs/DEFENSA.md)
+- 🎙️ **Guion de voces (ElevenLabs):** [`docs/VOCES.md`](docs/VOCES.md)
 
 | | |
 |---|---|
@@ -50,9 +51,17 @@ El objetivo es encontrar las 3 cintas VHS del inspector Salgado y salir por la p
 ## 2. Cómo se juega
 
 1. Escaneá el QR, ponete **auriculares** y tocá **INICIAR** (se habilita cuando terminan de cargar los modelos 3D).
-2. Leé **"Cómo se juega"** y tocá **ACTIVAR CÁMARA** (pide permiso para el giroscopio en iPhone).
-3. Prendé **REC** para ver lo que el ojo no ve. Si está muy oscuro, **NV** (el botón titila para avisarte).
+2. Tocá **ACTIVAR CÁMARA** (pide permiso para el giroscopio en iPhone).
+3. **No hay manual al principio**: como en los juegos de terror, el juego te va enseñando arriba de la pantalla
+   cuando hace falta ("Caminá con (W A S D)", "Prendé la cámara (C)", "Nuevo objetivo: …"), con la tecla o el botón
+   según tu dispositivo. La ayuda completa está en la pausa.
 4. **La regla:** si lo tenés en el centro del visor, no se mueve. Nunca le des la espalda.
+
+**El monstruo te busca.** Camina por la casa hacia donde estás; se escuchan sus **pasos pesados** y las cadenas.
+Si te ve, te **persigue** (música de persecución y latidos). Si lo perdés de vista, va al último lugar donde te vio
+y busca. **Escondete** abajo de una cama o adentro de un ropero (pieza de los chicos, living y escritorio): si no te
+vio entrar, busca un rato y se va; si te vio, te saca. Cuando te atrapa hay una **cinemática**: te da vuelta hacia él,
+te agarra de la cara y la cámara cae al piso.
 
 **Ganar y perder**
 - 🟢 **GANÁS** si encontrás las **3 cintas VHS** y salís por la puerta de la pieza del fondo → pantalla **ESCAPASTE**
@@ -70,6 +79,7 @@ La pantalla "Cómo se juega" también está en la pausa (II).
 | Mirar | **mover el celular** (giroscopio); sin giroscopio, arrastrar el dedo | mouse (clic para capturarlo) |
 | Caminar | **joystick táctil** (abajo a la izquierda) o **dejar el dedo apoyado** (modo una mano) | W A S D / flechas |
 | Agarrar / abrir / leer | **tocar el objeto en la pantalla** (Raycaster) o apuntar con el centro y tocar | E / espacio / clic |
+| Esconderse / salir (cama, ropero) | **TOCAR** cerca del escondite | E |
 | Inspeccionar (cinta, foto, mate, desayuno) | **arrastrar para girar** el objeto 3D · **pellizcar** para acercar | arrastrar con el mouse · rueda |
 | Cámara · Visión nocturna | **REC** · **NV** | C · N |
 | Zoom | **T / W** o **pellizcar con dos dedos** | rueda o Z / X |
@@ -98,6 +108,11 @@ darla vuelta tiene algo escrito), el mate y el desayuno, agarrar baterías y ver
   oclusión por paredes y anillo de feedback), **drag/rotate de objetos** en la inspección 3D (con inercia y pinch
   zoom), **mantener apretado para caminar** (una mano), **botones UI superpuestos**, arrastre para mirar.
   → `src/controllers/LookController.ts`, `src/components/Joystick.tsx`, `Engine.pickAt()`, `src/engine/Inspector.ts`
+- **IA del monstruo** (`src/scene/EntitySystem.ts`): estados *roam / chase / search / leave*; camina por una red
+  de puntos (BFS) o en línea recta si hay vista directa, percibe al jugador con raycast desde la cabeza, respeta los
+  escondites y abre la puerta del escritorio a su paso.
+- **Cinemática de captura** (`Engine.catchCinematic`): cámara guionada (latigazo, agarre, caída al piso) que apunta
+  al hueso de la cabeza del modelo.
 - **Animaciones**: `AnimationMixer` con los clips del monstruo (idle / walk / attack; se congela cuando lo
   observás) y animaciones procedurales en `requestAnimationFrame` (puertas, péndulo, parpadeo de luces,
   balanceo de cámara en mano). → `src/entities/Monster.ts`, `Engine.frame()`
@@ -177,6 +192,12 @@ npm run dev:https    # para probar el giroscopio desde el celular en la misma re
   https://sketchfab.com/3d-models/food-collection-game-ready-969b4e6ef7444650ba8a22a46d57ff43
 
 Los modelos se optimizaron para celular (texturas WebP, sin mapas de normales). Detalle en `public/models/CREDITS.md`.
+
+**Audio**
+- Música, ambiente y efectos (golpe de susto, persecución, suspenso, pasos, latidos, radio) generados con código
+  en WebAudio (`src/audio/sounds.ts`).
+- Voces: la voz del navegador (`speechSynthesis`, es-AR) o **voces grabadas opcionales** (por ejemplo de
+  ElevenLabs) en `public/audio/voz/` — ver `docs/VOCES.md`.
 
 **Otros**
 - Decodificador Draco: el de Three.js (`three/examples/jsm/libs/draco`, Apache 2.0).

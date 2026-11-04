@@ -521,3 +521,45 @@ export function fluorescent(m: Materials, glow: THREE.MeshBasicMaterial, len = 1
   g.add(cylMesh(0.016, 0.016, len, glow, 0, -0.06, 0, 6).rotateZ(Math.PI / 2));
   return g;
 }
+
+/** Cama con patas altas: abajo queda espacio para esconderse (≈ 40 cm). Cabecera hacia -Z. */
+export function bedWithSpace(m: Materials, w = 0.95, l = 1.95): THREE.Group {
+  const g = new THREE.Group();
+  const top = 0.44;
+  for (const [x, z] of [[-w / 2 + 0.04, -l / 2 + 0.04], [w / 2 - 0.04, -l / 2 + 0.04], [-w / 2 + 0.04, l / 2 - 0.04], [w / 2 - 0.04, l / 2 - 0.04]]) {
+    g.add(boxMesh(0.06, top, 0.06, m.wood, x, top / 2, z));
+  }
+  g.add(boxMesh(w, 0.06, l, m.wood, 0, top + 0.03, 0)); // tablas
+  g.add(boxMesh(w + 0.02, 0.1, 0.04, m.wood, 0, top - 0.02, -l / 2 + 0.02));
+  g.add(boxMesh(w + 0.02, 0.1, 0.04, m.wood, 0, top - 0.02, l / 2 - 0.02));
+  g.add(boxMesh(0.04, 0.1, l, m.wood, -w / 2 + 0.02, top - 0.02, 0));
+  g.add(boxMesh(0.04, 0.1, l, m.wood, w / 2 - 0.02, top - 0.02, 0));
+  g.add(boxMesh(w - 0.04, 0.16, l - 0.05, m.fabricDark, 0, top + 0.14, 0.01)); // colchón
+  g.add(boxMesh(w + 0.06, 1.0, 0.06, m.wood, 0, 0.5, -l / 2)); // cabecera
+  g.add(boxMesh(w * 0.7, 0.1, 0.35, m.fabric, 0, top + 0.27, -l / 2 + 0.28)); // almohada
+  // frazada que cuelga por un costado (tapa a medias el hueco de abajo)
+  const sheet = new THREE.Mesh(new THREE.PlaneGeometry(l * 0.8, 0.3, 8, 2), m.fabric);
+  const p = sheet.geometry.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getX(i) * 11) * 0.015);
+  sheet.rotation.set(0, Math.PI / 2, 0);
+  sheet.position.set(w / 2 + 0.01, top + 0.02, 0.15);
+  (sheet.material as THREE.Material).side = THREE.DoubleSide;
+  g.add(sheet);
+  return g;
+}
+
+/** Ropero cerrado con una rendija entre las puertas (para esconderse adentro). Puertas hacia +Z. */
+export function closedWardrobe(m: Materials, w = 1.1, h = 2.0, d = 0.55): THREE.Group {
+  const g = new THREE.Group();
+  g.add(boxMesh(w, h, 0.03, m.wood, 0, h / 2, -d / 2));
+  g.add(boxMesh(0.03, h, d, m.wood, -w / 2, h / 2, 0));
+  g.add(boxMesh(0.03, h, d, m.wood, w / 2, h / 2, 0));
+  g.add(boxMesh(w, 0.03, d, m.wood, 0, h, 0));
+  g.add(boxMesh(w, 0.08, d, m.wood, 0, 0.04, 0));
+  const doorW = w / 2 - 0.04;
+  g.add(boxMesh(doorW, h - 0.1, 0.025, m.wood, -w / 4 - 0.02, h / 2 + 0.03, d / 2));
+  g.add(boxMesh(doorW, h - 0.1, 0.025, m.wood, w / 4 + 0.02, h / 2 + 0.03, d / 2));
+  for (const x of [-0.05, 0.05]) g.add(boxMesh(0.02, 0.12, 0.03, m.metalLight, x, h * 0.52, d / 2 + 0.02));
+  g.add(boxMesh(w + 0.08, 0.08, d + 0.06, m.wood, 0, h + 0.04, 0));
+  return g;
+}

@@ -10,7 +10,16 @@ export interface Box2 {
   enabled?: () => boolean;
 }
 
-export type ItemKind = 'tape' | 'battery' | 'note' | 'photo' | 'door' | 'exit' | 'switch' | 'radio';
+export type ItemKind = 'tape' | 'battery' | 'note' | 'photo' | 'door' | 'exit' | 'switch' | 'radio' | 'hide';
+
+/** Escondite: dónde queda la cámara, hacia dónde mira y por dónde se sale. */
+export interface HideSpot {
+  type: 'bed' | 'wardrobe';
+  eye: THREE.Vector3;
+  /** Ángulo (yaw) hacia donde se mira desde adentro. */
+  yaw: number;
+  exit: THREE.Vector3;
+}
 
 export interface InteractiveItem {
   id: string;
@@ -25,6 +34,7 @@ export interface InteractiveItem {
   tapeIndex?: number;
   /** Texto que se abre al interactuar (clave de DOCUMENTS). */
   doc?: string;
+  hide?: HideSpot;
   /** Distancia máxima de interacción. */
   reach?: number;
 }

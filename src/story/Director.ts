@@ -101,12 +101,22 @@ export class Director {
       this.evalTimer = 0.2;
 
       this.once('opening', g.time > 1.5, () => store.message('Casa Carvajal, Banfield. 14 de octubre de 1998. El inspector Salgado nunca volvió.'));
-      this.once('recHint', g.time > 8 && !cam.on && cam.recSeconds === 0, () =>
+      // tutorial progresivo: cada control se enseña cuando hace falta, no todo al principio
+      const s = store.get();
+      this.once('moveHint', g.time > 6.5, () =>
         store.message(
-          store.get().touch
-            ? `Tocá REC para encender la cámara. Círculo de la izquierda: caminar.${store.get().gyro === 'active' ? '' : ' Arrastrá la pantalla para mirar.'}`
-            : '[C] cámara · WASD caminar · mouse mirar · [E] interactuar',
+          s.touch
+            ? `Caminá con el círculo de la izquierda, o dejá el dedo apoyado.${s.gyro === 'active' ? ' Mové el celular para mirar.' : ' Arrastrá para mirar.'}`
+            : 'Caminá con (W A S D). Mirá con el mouse.',
         ),
+      );
+      this.once('firstObjective', g.time > 10, () => store.newObjective('Encontrá las cintas del inspector Salgado.'));
+      this.once('recHint', g.time > 15 && !cam.on && cam.recSeconds === 0, () => store.message(`Prendé la cámara ${store.key('C', 'REC')}. Por el visor se ve lo que el ojo no ve.`));
+      this.once('interactHint', g.time > 3 && !!s.prompt && !s.hiding, () => store.message(s.touch ? 'Tocá el objeto para agarrarlo o revisarlo.' : `Agarrá o revisá cosas con ${store.key('E', '')}.`));
+      this.once('batteryHint', cam.on && cam.battery < 25 && s.batteries > 0, () => store.message(`Batería baja. Cambiala con ${store.key('B', 'BAT +')}.`));
+      this.once('pauseHint', g.time > 75, () => store.message(`${store.key('ESC', 'II')} pausa, ajustes y ayuda.`));
+      this.once('chaseHint', g.entity.present && g.entity.hunt === 'chase', () =>
+        store.message(`¡Te vio! Escondete abajo de una cama o en un ropero ${store.key('E', 'TOCAR')}… o miralo fijo por la cámara.`),
       );
 
       // primera aparición: al fondo del pasillo, simplemente está ahí
@@ -128,7 +138,7 @@ export class Director {
       this.once('allTapes', store.get().tapesFound.every(Boolean), () => {
         g.house.lights.flickerAll(g.time, 1.2);
         g.audio.play('thud', { pos: new THREE.Vector3(0, 1.2, -25), volume: 1.4 });
-        store.set({ objective: 'Salir por la puerta de la pieza del fondo.' });
+        store.newObjective('Escapá por la puerta de la pieza del fondo.');
         store.message('Algo cedió en la puerta de la pieza del fondo. Se escuchan cadenas.');
         g.audio.play('chains', { pos: new THREE.Vector3(0, 0.3, -23), duration: 2.4, volume: 1.4 });
         this.setTension(0.95);
@@ -150,6 +160,11 @@ export class Director {
     this.updateAmbient(room);
   }
 
+  /** El jugador se metió en un escondite. */
+  onHidden(): void {
+    if (this.firstTime('hiddenHint')) store.message('Quedate quieto. Si no te vio entrar, no te encuentra.');
+  }
+
   /** Si está muy oscuro y no se usa la visión nocturna, explicarla (dos veces como mucho) y hacer titilar el botón. */
   private darknessHint(room: string): void {
     const g = this.g;
@@ -165,11 +180,7 @@ export class Director {
     this.lastNvHint = g.time;
     this.darkFor = 0;
     store.set({ hintNV: true });
-    store.message(
-      store.get().touch
-        ? 'Está muy oscuro. Tocá NV: la visión nocturna ve en la oscuridad como rayos X (gasta el doble de batería).'
-        : 'Está muy oscuro. Apretá [N]: la visión nocturna ve en la oscuridad como rayos X (gasta el doble de batería).',
-    );
+    store.message(`Muy oscuro. Visión nocturna ${store.key('N', 'NV')}: ves como con rayos X, pero gasta el doble de batería.`);
   }
 
   private afterIntro(): void {

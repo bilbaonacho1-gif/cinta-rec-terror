@@ -45,6 +45,8 @@ export interface UIState {
   zoom: number;
   glitch: number;
   objective: string;
+  /** Cambia cada vez que hay un objetivo nuevo (se muestra arriba, estilo "Nuevo objetivo: …"). */
+  objectiveKey: number;
   tape: TapeUI | null;
   hasCheckpoint: boolean;
   doc: { text?: string; image?: string; caption?: string } | null;
@@ -59,6 +61,8 @@ export interface UIState {
   reduceFlashing: boolean;
   /** Modo una mano: se está caminando con la pantalla mantenida apretada. */
   holdWalk: boolean;
+  /** Escondido abajo de una cama o adentro de un ropero. */
+  hiding: 'bed' | 'wardrobe' | null;
   touch: boolean;
   promptTape: number | null;
 }
@@ -99,6 +103,17 @@ class Store {
     this.set({ message: text, messageKey: this.state.messageKey + 1 });
   }
 
+  /** Objetivo nuevo: queda en la pausa y aparece arriba unos segundos. */
+  newObjective(text: string): void {
+    if (this.state.objective === text && this.state.objectiveKey > 0) return;
+    this.set({ objective: text, objectiveKey: this.state.objectiveKey + 1 });
+  }
+
+  /** Nombre del control según el dispositivo: tecla en la compu, botón en el celular. */
+  key(desktop: string, touch: string): string {
+    return `(${this.state.touch ? touch : desktop})`;
+  }
+
   toast(text: string): void {
     this.set({ toast: text, toastKey: this.state.toastKey + 1 });
   }
@@ -132,6 +147,7 @@ export const store = new Store({
   zoom: 1,
   glitch: 0,
   objective: 'Encontrar las cintas del inspector Salgado.',
+  objectiveKey: 0,
   tape: null,
   hasCheckpoint: false,
   doc: null,
@@ -142,6 +158,7 @@ export const store = new Store({
   voice: true,
   reduceFlashing: false,
   holdWalk: false,
+  hiding: null,
   touch: typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches,
   promptTape: null,
 });

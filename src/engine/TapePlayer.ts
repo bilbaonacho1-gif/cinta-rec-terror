@@ -5,7 +5,7 @@ import { ACTOR_POSES, buildPlayerAvatar } from '../entities/Actors';
 import type { Humanoid } from '../entities/Humanoid';
 import type { EntitySystem } from '../scene/EntitySystem';
 import type { Camcorder } from './Camcorder';
-import { estimateSpeech, spanishVoice } from '../audio/voice';
+import { estimateSpeech, playClip, recordedVoice, spanishVoice, stopClip } from '../audio/voice';
 import { store } from './store';
 
 const INSERT = 1.3;
@@ -110,6 +110,7 @@ export class TapePlayer {
     this.cam.forcedStatic = 1;
     this.audio.play('static', { duration: 0.5, bus: 'tape', volume: 0.6 });
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+    stopClip();
     this.completed = completed;
   }
 
@@ -126,6 +127,20 @@ export class TapePlayer {
     store.set({ subtitle: line.text });
     if (isSound) {
       this.audio.play(i === 0 ? 'static' : 'interference', { duration: 1.4, bus: 'tape', volume: 0.5 });
+      return;
+    }
+    // voz grabada (ElevenLabs): public/audio/voz/cinta<N>-<línea>.mp3
+    const clip = this.voiceEnabled ? recordedVoice(`cinta${tape.id}-${String(i + 1).padStart(2, '0')}`) : null;
+    if (clip) {
+      playClip(clip, {
+        volume: 0.95,
+        onDuration: (d) => {
+          if (this.line === i && Number.isFinite(d)) this.lineDur = d + 0.35;
+        },
+        onEnd: () => {
+          if (this.line === i) this.lineDone = true;
+        },
+      });
       return;
     }
     if (this.voiceEnabled && typeof speechSynthesis !== 'undefined') {

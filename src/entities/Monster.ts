@@ -138,6 +138,8 @@ export class MonsterEntity {
   private movedAt = -10;
   private clock = 0;
   private glow = 1;
+  /** Hueso de la cabeza del modelo (para que las cinemáticas apunten a la cara de verdad). */
+  private headBone: THREE.Object3D | null = null;
 
   constructor() {
     const rnd = seeded(66);
@@ -366,6 +368,9 @@ export class MonsterEntity {
     for (const child of [...this.root.children]) child.visible = false;
     this.root.add(model);
     this.model = model;
+    model.traverse((o) => {
+      if (!this.headBone && /head/i.test(o.name) && !/ponytail/i.test(o.name)) this.headBone = o;
+    });
     this.mixer = new THREE.AnimationMixer(model);
     for (const clip of gltf.animations) this.actions.set(clip.name, this.mixer.clipAction(clip));
     const attack = this.actions.get('attack');
@@ -376,6 +381,12 @@ export class MonsterEntity {
     this.current = null;
     this.setPose(this.poseName);
     this.setSkinGlow(this.glow);
+  }
+
+  /** Posición de la cara en el mundo (hueso de la cabeza del GLB, o la sonda de la figura procedural). */
+  headWorld(target = new THREE.Vector3()): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return (this.headBone ?? this.probes[0]).getWorldPosition(target);
   }
 
   get hasModel(): boolean {

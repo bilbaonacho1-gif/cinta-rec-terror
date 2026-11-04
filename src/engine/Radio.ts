@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { AudioSystem, LoopHandle } from '../audio/AudioSystem';
-import { hasSpeech, say } from '../audio/voice';
+import { hasSpeech, recordedVoice, sayOrPlay, stopClip } from '../audio/voice';
 import { RADIO_BULLETIN, RADIO_WHISPER } from '../data/documents';
 import { store } from './store';
 
@@ -34,10 +34,10 @@ export class Radio {
     this.hiss = this.audio.loop('tapeHiss', { pos: this.pos, volume: 0.8 });
     store.set({ radio: true });
     await wait(1000);
-    for (const line of RADIO_BULLETIN) {
+    for (const [i, line] of RADIO_BULLETIN.entries()) {
       if (tok !== this.token) return;
       store.set({ subtitle: `RADIO: ${line}` });
-      await say(line, { rate: 1.08, pitch: 1.05 });
+      await sayOrPlay(`radio-${i + 1}`, line, { rate: 1.08, pitch: 1.05 });
       await wait(200);
     }
     if (scary && !this.whispered && tok === this.token) {
@@ -48,7 +48,7 @@ export class Radio {
       if (tok !== this.token) return;
       store.set({ subtitle: RADIO_WHISPER });
       onWhisper();
-      if (hasSpeech()) await say(RADIO_WHISPER, { rate: 0.6, pitch: 0.1, volume: 1 });
+      if (recordedVoice('radio-susurro') || hasSpeech()) await sayOrPlay('radio-susurro', RADIO_WHISPER, { rate: 0.6, pitch: 0.1, volume: 1 });
       else await wait(2200);
     }
     if (tok === this.token) this.stop();
@@ -59,6 +59,7 @@ export class Radio {
     this.token++;
     this.on = false;
     if (hasSpeech()) speechSynthesis.cancel();
+    stopClip();
     this.hiss?.stop(0.3);
     this.hiss = null;
     this.audio.play('switchClick', { pos: this.pos, volume: 0.6 });

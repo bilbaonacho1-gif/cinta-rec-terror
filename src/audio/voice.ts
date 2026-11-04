@@ -59,3 +59,57 @@ export function say(text: string, o: { rate?: number; pitch?: number; volume?: n
     setTimeout(finish, (fallback * 2.2 + 1.5) * 1000);
   });
 }
+
+// ------------------------------------------------------------------ voces grabadas (ElevenLabs u otra)
+/**
+ * Voces grabadas opcionales: si en public/audio/voz/manifest.json figura un id (por ejemplo "cinta1-02"),
+ * se reproduce public/audio/voz/<id>.mp3 en lugar de la voz del navegador. Ver docs/VOCES.md.
+ */
+let recorded: Set<string> | null = null;
+let currentClip: HTMLAudioElement | null = null;
+
+export async function loadVoiceManifest(): Promise<void> {
+  try {
+    const r = await fetch(`${import.meta.env.BASE_URL}audio/voz/manifest.json`, { cache: 'no-cache' });
+    if (r.ok) recorded = new Set((await r.json()) as string[]);
+  } catch {
+    /* sin voces grabadas: se usa speechSynthesis */
+  }
+}
+
+export function recordedVoice(id: string): string | null {
+  return recorded?.has(id) ? `${import.meta.env.BASE_URL}audio/voz/${id}.mp3` : null;
+}
+
+/** Reproduce un clip de voz; avisa la duración real apenas la conoce y cuando termina. */
+export function playClip(url: string, o: { volume?: number; onDuration?: (s: number) => void; onEnd?: () => void } = {}): HTMLAudioElement {
+  stopClip();
+  const a = new Audio(url);
+  a.volume = o.volume ?? 1;
+  a.onloadedmetadata = () => o.onDuration?.(a.duration);
+  a.onended = () => o.onEnd?.();
+  a.onerror = () => o.onEnd?.();
+  void a.play().catch(() => o.onEnd?.());
+  currentClip = a;
+  return a;
+}
+
+export function stopClip(): void {
+  if (!currentClip) return;
+  currentClip.onended = null;
+  currentClip.pause();
+  currentClip = null;
+}
+
+export function pauseClip(pause: boolean): void {
+  if (!currentClip) return;
+  if (pause) currentClip.pause();
+  else void currentClip.play().catch(() => undefined);
+}
+
+/** Igual que say(), pero con el clip grabado si existe. */
+export function sayOrPlay(id: string, text: string, o: { rate?: number; pitch?: number; volume?: number } = {}): Promise<void> {
+  const url = recordedVoice(id);
+  if (!url) return say(text, o);
+  return new Promise((resolve) => playClip(url, { volume: o.volume ?? 1, onEnd: () => resolve() }));
+}

@@ -266,11 +266,32 @@ export class AudioSystem {
     this.wind = this.loop('wind', { volume: 0.35 });
     this.roomTone = this.loop('roomTone', { volume: 0.5 });
     this.drone = this.loop('drone', { volume: 0.0 });
+    this.suspense = this.loop('suspense', { volume: 0.25 });
+  }
+
+  private suspense: LoopHandle | null = null;
+  private chaseLoop: LoopHandle | null = null;
+
+  /** Música de persecución (0 = apagada, 1 = al máximo). */
+  setChase(level: number): void {
+    if (!this.ctx) return;
+    if (level <= 0.01) {
+      if (this.chaseLoop) {
+        this.chaseLoop.setVolume(0, 1.2);
+        const l = this.chaseLoop;
+        this.chaseLoop = null;
+        setTimeout(() => l.stop(0.1), 1400);
+      }
+      return;
+    }
+    if (!this.chaseLoop) this.chaseLoop = this.loop('chase', { volume: 0 });
+    this.chaseLoop.setVolume(level * 0.9, 0.6);
   }
 
   setTension(t: number): void {
     this.tension = THREE.MathUtils.clamp(t, 0, 1);
     this.drone?.setVolume(0.08 + this.tension * 0.55, 1.5);
+    this.suspense?.setVolume(0.2 + this.tension * 0.5, 2);
     this.drone?.setParam('dissonance', this.tension, 2);
   }
 
@@ -285,6 +306,8 @@ export class AudioSystem {
   /** Apaga todo (fin de partida) salvo el tono de la casa. */
   silence(except: 'roomTone' | 'none' = 'roomTone'): void {
     this.drone?.setVolume(0, 0.2);
+    this.suspense?.setVolume(0, 0.2);
+    this.setChase(0);
     this.wind?.setVolume(0, 0.2);
     if (except !== 'roomTone') this.roomTone?.setVolume(0, 0.2);
   }

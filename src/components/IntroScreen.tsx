@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Engine } from '../engine/Engine';
-import { HowToPlay } from './HowToPlay';
 import { useUI } from '../engine/store';
 
 /** Barra de carga de los assets 3D (estilo contador de cinta). */
@@ -19,7 +18,7 @@ function LoadBar({ progress }: { progress: number }) {
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-type Step = 'lines' | 'logo' | 'phones' | 'help' | 'activate' | 'done';
+type Step = 'lines' | 'logo' | 'phones' | 'activate' | 'done';
 
 const LINES = [
   'BANFIELD, PROVINCIA DE BUENOS AIRES. OCTUBRE DE 1998.',
@@ -65,7 +64,7 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
     setBusy(false);
     setStep('phones');
     await wait(2600);
-    setStep('help');
+    setStep('activate');
   };
 
   const activate = async () => {
@@ -91,15 +90,13 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
           <button type="button" className="btn-screen on" disabled={busy || !ui.modelsReady} onClick={start}>
             {ui.modelsReady ? '[ INICIAR ]' : `CARGANDO… ${Math.round(ui.loadProgress * 100)}%`}
           </button>
-          <div className="intro-line small on warning">⚠ Contiene luces que parpadean y sustos. Podés reducir los parpadeos en las instrucciones o en la pausa.</div>
+          <div className="intro-line small on warning">⚠ Contiene luces que parpadean y sustos. Podés reducir los parpadeos en la pausa.</div>
         </>
       )}
       {step === 'phones' && <div className="intro-line on">Ponete auriculares.</div>}
-      {step === 'help' && <HowToPlay engine={engine} onClose={() => setStep('activate')} />}
       {step === 'activate' && (
         <>
           <div className="intro-line on">Mové el celular para mirar alrededor.</div>
-          <div className="intro-line small on">En la compu: mouse para mirar · WASD para caminar · clic para interactuar.</div>
           <button type="button" className="btn-screen on" disabled={busy} onClick={activate}>
             ACTIVAR CÁMARA
           </button>

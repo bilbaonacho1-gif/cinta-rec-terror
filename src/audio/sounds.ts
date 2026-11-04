@@ -518,6 +518,75 @@ const shutterBang: Recipe = (s, out, t0) => {
   return 1.5;
 };
 
+/** Golpe de susto (cuando aparece el monstruo): estruendo grave + racimo disonante de metales + chirrido agudo. */
+const stinger: Recipe = (s, out, t0, o) => {
+  const dur = o.duration ?? 2.6;
+  // estruendo
+  burst(s, out, t0, s.brown, 'lowpass', 160, 0.9, 1.6, 1.4, 0.004);
+  tone(s, out, t0, 'sine', 70, 34, 0.9, 1.6, 0.004);
+  // racimo disonante (cluster) con brillo que se apaga
+  const lp = filt(s, 'lowpass', 3200, 0.8);
+  lp.frequency.setValueAtTime(3200, t0);
+  lp.frequency.exponentialRampToValueAtTime(500, t0 + dur);
+  const g = envGain(s, t0, 0.015, 0.22, dur);
+  chain(lp, g, out);
+  for (const f of [146.8, 155.6, 207.7, 220, 311.1, 329.6]) osc(s, 'sawtooth', f * rand(0.995, 1.005), t0, dur).connect(lp);
+  // chirrido agudo que cae
+  for (const [f0, f1] of [[2600, 1700], [2750, 1650]] as const) {
+    const sc = osc(s, 'sawtooth', f0, t0, dur * 0.7);
+    sc.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.7);
+    const vib = osc(s, 'sine', 9, t0, dur * 0.7);
+    const vg = s.ctx.createGain();
+    vg.gain.value = 40;
+    vib.connect(vg).connect(sc.frequency);
+    chain(sc, filt(s, 'bandpass', 2200, 2), envGain(s, t0 + 0.02, 0.04, 0.05, dur * 0.65), out);
+  }
+  burst(s, out, t0, s.white, 'highpass', 2500, 0.7, 0.35, 0.6);
+  return dur;
+};
+
+/** Grito del monstruo (cinemática de captura): diente de sierra con formantes, vibrato y ruido. */
+const scream: Recipe = (s, out, t0, o) => {
+  const dur = o.duration ?? 1.5;
+  const src = osc(s, 'sawtooth', 260, t0, dur);
+  src.frequency.linearRampToValueAtTime(620, t0 + dur * 0.25);
+  src.frequency.linearRampToValueAtTime(420, t0 + dur * 0.7);
+  src.frequency.linearRampToValueAtTime(180, t0 + dur);
+  const vib = osc(s, 'sine', 13, t0, dur);
+  const vg = s.ctx.createGain();
+  vg.gain.value = 35;
+  vib.connect(vg).connect(src.frequency);
+  const shaper = s.ctx.createWaveShaper();
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 255) * 2 - 1;
+    curve[i] = Math.tanh(x * 4);
+  }
+  shaper.curve = curve;
+  const env = envGain(s, t0, 0.03, 0.7, dur * 0.9, dur * 0.1);
+  const mix = s.ctx.createGain();
+  chain(mix, shaper, env, out);
+  for (const [f, q, gn] of [[700, 6, 1], [1150, 8, 0.8], [2600, 10, 0.5]] as const) {
+    const bp = filt(s, 'bandpass', f, q);
+    const g = s.ctx.createGain();
+    g.gain.value = gn;
+    src.connect(bp).connect(g).connect(mix);
+  }
+  const n = noiseSrc(s, s.white, t0, dur);
+  chain(n, filt(s, 'bandpass', 1800, 0.8), envGain(s, t0, 0.02, 0.25, dur), out);
+  return dur;
+};
+
+/** Pisada pesada y lenta del monstruo (se escucha cuando camina hacia vos). */
+const heavyStep: Recipe = (s, out, t0, o) => {
+  const v = o.rate ?? 1;
+  burst(s, out, t0, s.brown, 'lowpass', 140 * v, 0.9, 1.3, 0.35, 0.003);
+  tone(s, out, t0, 'sine', 62 * v, 38, 0.7, 0.3, 0.003);
+  burst(s, out, t0 + 0.02, s.white, 'bandpass', 700, 1.2, 0.12, 0.12);
+  if (Math.random() < 0.35) creak(s, out, t0 + 0.05, { duration: rand(0.25, 0.5), rate: 0.5 });
+  return 0.5;
+};
+
 export const SOUNDS = {
   creak,
   knock,
@@ -559,6 +628,9 @@ export const SOUNDS = {
   dogBark,
   trafficPass,
   shutterBang,
+  stinger,
+  scream,
+  heavyStep,
 } satisfies Record<string, Recipe>;
 
 export type SoundName = keyof typeof SOUNDS;
@@ -681,6 +753,45 @@ export const LOOPS = {
     const mg = s.ctx.createGain();
     mg.gain.value = 0.02;
     chain(m, filt(s, 'lowpass', 200, 1), mg, out);
+  },
+  /** Música de persecución: golpes graves pulsantes y cuerdas en trémolo disonante. */
+  chase: (s, out, p, stops) => {
+    const master = s.ctx.createGain();
+    master.gain.value = 0.6;
+    master.connect(out);
+    // pulso grave (≈ 132 bpm)
+    const drum = loopNoise(s, s.brown, stops);
+    const dlp = filt(s, 'lowpass', 120, 1.2);
+    const dg = s.ctx.createGain();
+    dg.gain.value = 0;
+    const pulse = loopOsc(s, 'square', 2.2, stops);
+    const pg = s.ctx.createGain();
+    pg.gain.value = 0.55;
+    pulse.connect(pg).connect(dg.gain);
+    chain(drum, dlp, dg, master);
+    // trémolo de cuerdas
+    const strings = s.ctx.createGain();
+    strings.gain.value = 0.05;
+    lfo(s, 9, 0.045, strings.gain, stops);
+    const sbp = filt(s, 'bandpass', 900, 0.9);
+    chain(sbp, strings, master);
+    for (const f of [220, 233.1, 311.1, 466.2]) loopOsc(s, 'sawtooth', f, stops).connect(sbp);
+    p.intensity = master.gain;
+  },
+  /** Ambiente de suspenso: colchón grave que respira y un vidrio agudo apenas audible. */
+  suspense: (s, out, _p, stops) => {
+    const lp = filt(s, 'lowpass', 280, 0.9);
+    const g = s.ctx.createGain();
+    g.gain.value = 0.12;
+    chain(lp, g, out);
+    for (const f of [73.4, 77.8, 110]) loopOsc(s, 'sawtooth', f, stops).connect(lp);
+    lfo(s, 0.07, 140, lp.frequency, stops);
+    lfo(s, 0.11, 0.05, g.gain, stops);
+    const hi = s.ctx.createGain();
+    hi.gain.value = 0.006;
+    lfo(s, 0.23, 0.005, hi.gain, stops);
+    hi.connect(out);
+    for (const f of [1567, 1661]) loopOsc(s, 'sine', f, stops).connect(hi);
   },
   monsterNear: (s, out, p, stops) => {
     const sub = loopOsc(s, 'sine', 37, stops);

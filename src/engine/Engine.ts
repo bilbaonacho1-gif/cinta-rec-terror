@@ -20,6 +20,7 @@ import { finishAsset, trackAsset } from './loading';
 import { Radio } from './Radio';
 import { Inspector } from './Inspector';
 import { a11y } from '../core/a11y';
+import { loadVoiceManifest, pauseClip } from '../audio/voice';
 import { TapePlayer } from './TapePlayer';
 import { store } from './store';
 
@@ -112,6 +113,7 @@ export class Engine {
     this.inspector = new Inspector(this.camera);
     this.radio = new Radio(this.audio, this.house.refs.radio.getWorldPosition(new THREE.Vector3()));
     void this.loadModels();
+    void loadVoiceManifest();
 
     this.camcorder.onThreshold = (th) => {
       this.audio.play('batteryLow', { bus: 'ui' });
@@ -120,10 +122,18 @@ export class Engine {
     };
     this.camcorder.onDepleted = () => void this.onBatteryDead();
     this.entity.onAttack = () => void this.onCaught();
+    // vuelve a aparecer en el visor: golpe de susto
+    this.entity.onSighting = () => {
+      this.audio.play('stinger', { bus: 'ui', volume: 0.85 });
+      this.camcorder.burst(0.7, 0.6, this.time, false);
+      this.look.shake(0.9);
+      this.director.setTension(0.6);
+      if (navigator.vibrate) navigator.vibrate(120);
+    };
     this.entity.onFirstSeen = () => {
       this.audio.play('swell', { duration: 6, volume: 0.6 });
       this.director.setTension(0.3);
-      store.message('¡Ahí está! No le saques la vista: mientras esté en el centro del visor, no se mueve.');
+      store.message('No le saques la vista. Mientras lo tengas en el visor, no se mueve.');
     };
     // baldosas y cemento suenan distinto que el parquet del living y el escritorio
     this.player.onStep = () => {
@@ -246,7 +256,7 @@ export class Engine {
     this.camcorder.setNightVision(!wasOn);
     if (this.camcorder.nightVision) store.set({ hintNV: false });
     if (!wasOn && this.camcorder.nightVision && this.director.firstTime('nvHint')) {
-      store.message('VISIÓN NOCTURNA ("rayos X"): ves en la oscuridad total, pero gasta el doble de batería. Apagala cuando haya luz.');
+      store.message('Visión nocturna: apagala cuando haya luz, gasta el doble.');
     }
     this.syncUI();
   }
@@ -284,6 +294,7 @@ export class Engine {
     this.look.exitLock();
     this.radio.stop();
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.pause();
+    pauseClip(true);
     void this.audio.suspend();
     store.set({ phase: 'paused' });
   }
@@ -297,6 +308,7 @@ export class Engine {
     this.phase = this.prevPhase;
     void this.audio.resume();
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.resume();
+    pauseClip(false);
     this.last = performance.now();
     store.set({ phase: this.phase });
     if (this.phase === 'playing') this.look.requestLock();
@@ -456,6 +468,8 @@ export class Engine {
   retry(): void {
     const cp = this.checkpoint;
     if (!cp) return location.reload();
+    this.cine = null;
+    this.camera.up.set(0, 1, 0);
     this.player.reset(cp.pos);
     this.look.recenter(cp.yaw);
     this.camcorder.battery = Math.max(cp.battery, 35);
@@ -554,6 +568,11 @@ export class Engine {
 
   interact(at?: { x: number; y: number }): void {
     if (!this.canControl || store.get().promptTape !== null) return;
+    if (this.hiding) {
+      // escondido: sólo se sale con la tecla o el botón (un toque suelto en la pantalla no te delata)
+      if (!at) this.exitHide();
+      return;
+    }
     let item = this.nearby;
     if (at) {
       const picked = this.pickAt(at.x, at.y);
@@ -574,7 +593,8 @@ export class Engine {
         const found = [...s.tapesFound];
         found[i] = true;
         this.openedAt = performance.now();
-        store.set({ tapesFound: found, promptTape: i, objective: found.every(Boolean) ? 'Salir por la puerta de la pieza del fondo.' : `Encontrar las cintas (${found.filter(Boolean).length}/3).` });
+        store.set({ tapesFound: found, promptTape: i });
+        store.newObjective(found.every(Boolean) ? 'Escapá por la puerta de la pieza del fondo.' : `Encontrá las cintas del inspector Salgado (${found.filter(Boolean).length}/3).`);
         store.toast(TAPES_DATA[i].label);
         this.entity.setAggressionFromTapes(found.filter(Boolean).length);
         this.director.setTension(0.2 + found.filter(Boolean).length * 0.25);
@@ -594,7 +614,7 @@ export class Engine {
         this.audio.play('pickup');
         store.set({ batteries: s.batteries + 1 });
         store.toast('BATTERY PACK +20%');
-        store.message(s.touch ? 'Tocá BAT + para cambiar la batería cuando la necesites.' : '[B] para cambiar la batería cuando la necesites.');
+        store.message(`Batería de repuesto. Cambiala cuando la necesites ${store.key('B', 'BAT +')}.`);
         break;
       case 'note': {
         // el mate y el desayuno se inspeccionan en 3D (si el modelo cargó)
@@ -607,6 +627,9 @@ export class Engine {
         if (item.doc === 'letter') this.director.setTension(0.25);
         break;
       }
+      case 'hide':
+        this.enterHide(item);
+        break;
       case 'radio':
         this.radio.toggle(this.director.introDone, () => this.director.radioScare());
         break;
@@ -680,6 +703,67 @@ export class Engine {
     store.message(store.get().batteries > 0 ? 'Sin batería. Cambiala antes de que se acerque.' : 'Sin batería. Ahora no podés verlo.');
   }
 
+  // ------------------------------------------------------------------ escondites
+  /** Escondite actual (abajo de una cama o adentro de un ropero). */
+  hiding: InteractiveItem | null = null;
+  private hideBreath = 0;
+
+  /** Esconderse: la cámara pasa abajo de la cama o detrás de la rendija del ropero. */
+  private enterHide(item: InteractiveItem): void {
+    const h = item.hide;
+    if (!h) return;
+    this.hiding = item;
+    this.player.enabled = false;
+    this.player.holdForward = false;
+    this.look.recenter(h.yaw);
+    this.look.pitch = h.type === 'bed' ? 0.04 : -0.05;
+    this.audio.play(h.type === 'bed' ? 'paper' : 'creak', { pos: h.eye, volume: 0.7, duration: 0.6 });
+    this.entity.setPlayerHidden(true);
+    this.hideBreath = 1.5;
+    store.set({ hiding: h.type, holdWalk: false });
+    this.director.onHidden();
+  }
+
+  exitHide(): void {
+    const h = this.hiding?.hide;
+    if (!h) return;
+    this.hiding = null;
+    this.player.reset(h.exit);
+    this.player.enabled = true;
+    this.look.recenter(this.look.currentYaw(this.camera));
+    this.audio.play('creak', { pos: h.exit, volume: 0.6, duration: 0.5 });
+    this.entity.setPlayerHidden(false);
+    store.set({ hiding: null });
+  }
+
+  /** Persecución y cercanía: música que sube con la distancia y latidos cuando lo tenés encima. */
+  private dreadTimer = 0;
+  private heartTimer = 0;
+  private updateDread(dt: number): void {
+    this.dreadTimer -= dt;
+    if (this.dreadTimer <= 0) {
+      this.dreadTimer = 0.25;
+      this.audio.setChase(this.entity.chaseLevel);
+    }
+    const near = this.entity.present && this.entity.mode === 'stalking' && this.entity.distance < 5;
+    if (!near || this.hiding) return;
+    this.heartTimer -= dt;
+    if (this.heartTimer <= 0) {
+      this.heartTimer = THREE.MathUtils.lerp(0.55, 1.1, this.entity.distance / 5);
+      this.audio.play('heartbeat', { bus: 'ui', volume: 0.5 + (1 - this.entity.distance / 5) * 0.5 });
+    }
+  }
+
+  /** Mientras estás escondido se escucha tu respiración; más agitada si él está cerca. */
+  private updateHiding(dt: number): void {
+    this.hideBreath -= dt;
+    if (this.hideBreath > 0) return;
+    const near = this.entity.present && this.entity.distance < 4.5;
+    this.hideBreath = near ? 1.6 : 3.4;
+    this.audio.play('breath', { volume: near ? 0.55 : 0.3, bus: 'ui' });
+    if (near) this.audio.play('heartbeat', { volume: 0.7, bus: 'ui' });
+  }
+
   /** Datos de la partida para las pantallas de ganar y perder. */
   private result(won: boolean): NonNullable<ReturnType<typeof store.get>['ending']> {
     const s = store.get();
@@ -694,56 +778,137 @@ export class Engine {
   }
 
   /**
-   * Te atrapó: se gasta un rebobinado. Si quedan, la pantalla "SEÑAL PERDIDA" deja rebobinar al último
-   * punto guardado; si era el último, se pierde la partida.
+   * Te atrapó: cinemática de captura (te da vuelta la cabeza hacia él, se te tira encima, te agarra de la cara
+   * y la cámara cae al piso). Se gasta un rebobinado: si quedan, "SEÑAL PERDIDA"; si era el último, se pierde.
    */
   private async onCaught(): Promise<void> {
     this.phase = 'caught';
     this.radio.stop();
     this.look.exitLock();
     this.player.enabled = false;
+    this.player.holdForward = false;
+    this.audio.setChase(0);
     const lives = Math.max(0, store.get().lives - 1);
-    store.set({ lives });
+    const eye = (this.hiding?.hide?.eye ?? this.player.position).clone();
+    if (this.hiding) {
+      this.hiding = null;
+      this.entity.setPlayerHidden(false);
+    }
+    store.set({ lives, hiding: null, holdWalk: false, prompt: null });
     if (!this.camcorder.on) this.camcorder.powerOn(true);
-    const eye = this.camera.position.clone();
-    const dir = this.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
-    const at = eye.clone().addScaledVector(dir, 0.85).setY(0);
-    this.entity.actor(at, eye.clone().setY(0), 'reach');
-    this.entity.entity.setSkinGlow(3);
-    this.camcorder.burst(0.85, 1.6, this.time, false);
-    this.look.shake(2.5);
-    this.audio.play('static', { duration: 1.3, bus: 'ui', volume: 0.9 });
-    this.audio.play('interference', { duration: 1.3, bus: 'ui' });
-    if (navigator.vibrate) navigator.vibrate([200, 100, 300]);
-    await this.scheduler.wait(1.3);
+    await this.catchCinematic(eye);
+    this.cine = null;
+    this.entity.entity.root.rotation.set(0, this.entity.entity.root.rotation.y, 0);
+    this.camcorder.forcedBlack = 1;
+    this.entity.actor(null);
     if (lives > 0) {
-      this.camcorder.forcedBlack = 1;
       this.audio.silence('none');
       this.player.enabled = true;
       store.set({ phase: 'caught' });
       return;
     }
-    // sin rebobinados: la cámara se apaga y vuelve a prenderse sola, con él pegado a la lente
-    this.camcorder.forcedBlack = 1;
+    // sin rebobinados: un último grito en la oscuridad
     this.audio.silence('roomTone');
-    this.entity.actor(null);
-    await this.scheduler.wait(2.2);
-    this.audio.play('monsterBreath', { pos: this.camera.position.clone().add(this.camera.getWorldDirection(new THREE.Vector3())), volume: 1.3 });
-    await this.scheduler.wait(2.4);
-    this.camcorder.forcedBlack = 0;
-    this.audio.play('recBeep', { bus: 'ui' });
-    const eye2 = this.camera.position.clone();
-    const dir2 = this.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
-    this.entity.actor(eye2.clone().addScaledVector(dir2, 1.0).setY(0), eye2.clone().setY(0), 'close');
-    this.entity.entity.setSkinGlow(3);
-    this.camcorder.burst(0.5, 2, this.time);
-    this.audio.play('static', { duration: 1.6, bus: 'ui', volume: 0.6 });
-    await this.scheduler.wait(1.6);
-    this.camcorder.forcedBlack = 1;
+    await this.scheduler.wait(1.0);
+    this.audio.play('scream', { bus: 'ui', volume: 0.45, duration: 1.8 });
+    await this.scheduler.wait(1.8);
     this.audio.setVolume(0);
-    this.entity.actor(null);
     this.phase = 'lost';
     store.set({ phase: 'lost', ending: this.result(false) });
+  }
+
+  /** Cámara controlada por guion (cinemáticas): devuelve posición, punto a mirar e inclinación. */
+  private cine: ((t: number) => { pos: THREE.Vector3; look: THREE.Vector3; roll: number }) | null = null;
+  private cineStart = 0;
+
+  private async catchCinematic(eye: THREE.Vector3): Promise<void> {
+    const cam = this.camera;
+    const fwd = cam.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+    // de dónde viene: si estaba atrás, la cabeza gira hacia él (latigazo)
+    const mpos = this.entity.present ? this.entity.entity.root.position.clone() : eye.clone().addScaledVector(fwd, 1.2);
+    const dir = mpos.clone().sub(eye).setY(0);
+    if (dir.lengthSq() < 0.04) dir.copy(fwd);
+    dir.normalize();
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const floorEye = eye.clone().setY(0);
+    const startLook = eye.clone().addScaledVector(fwd, 2);
+    const monster = this.entity.entity;
+    this.entity.actor(floorEye.clone().addScaledVector(dir, 1.3), floorEye, 'reach');
+    monster.setSkinGlow(3);
+    this.cineStart = this.time;
+    const head = (d: number, y: number) => eye.clone().setY(y).addScaledVector(dir, d);
+    // el modelo mira hacia +Z: para que te mire de frente, yaw hacia la cámara; se inclina hacia adelante (local X)
+    const yaw = Math.atan2(-dir.x, -dir.z);
+    monster.root.rotation.order = 'YXZ';
+    let posed = false;
+    /**
+     * Ubica al monstruo a `d` metros, inclinado `lean` rad, y devuelve dónde queda su cara (hueso de la cabeza).
+     * Si la cara quedaría a menos de `gap` de la cámara, lo corre para atrás: nunca te atraviesa.
+     */
+    const place = (d: number, lean: number, gap = 0.42) => {
+      monster.root.position.copy(floorEye).addScaledVector(dir, d);
+      monster.root.rotation.set(lean, yaw, 0);
+      let face = monster.headWorld();
+      const ahead = face.clone().sub(eye).dot(dir);
+      if (ahead < gap) {
+        monster.root.position.addScaledVector(dir, gap - ahead);
+        face = monster.headWorld();
+      }
+      return face;
+    };
+    this.cine = (t) => {
+      const shake = (a: number) => new THREE.Vector3((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+      if (t < 0.32) {
+        // latigazo hacia él; se tira encima con los brazos arriba
+        const k = t / 0.32;
+        const e = 1 - Math.pow(1 - k, 3);
+        const face = place(1.5 - 0.4 * e, 0.1 * e, 0.6);
+        return { pos: eye.clone(), look: startLook.clone().lerp(face, e), roll: 0 };
+      }
+      if (!posed) {
+        posed = true;
+        monster.setPose('stand');
+      }
+      if (t < 1.4) {
+        // te agarra de la cara: se inclina hasta quedar cara a cara, tirones
+        const k = Math.min(1, (t - 0.32) / 0.5);
+        const face = place(1.1, 0.1 + 0.25 * k, 0.42 + 0.1 * k);
+        const pos = eye.clone().addScaledVector(dir, 0.1 * k).add(new THREE.Vector3(0, 0.12 * k, 0)).add(shake(0.05));
+        return { pos, look: face.add(shake(0.06)), roll: Math.sin(t * 28) * 0.1 };
+      }
+      if (t < 1.85) {
+        // la cámara se cae al piso
+        const k = (t - 1.4) / 0.45;
+        const e = k * k;
+        const face = place(1.1, 0.35 + 0.15 * e, 0.5);
+        const pos = eye.clone().addScaledVector(dir, 0.1).addScaledVector(side, 0.25 * e);
+        pos.y = THREE.MathUtils.lerp(eye.y + 0.12, 0.22, e);
+        return { pos, look: face.clone().lerp(face.clone().setY(1.0), e * 0.5), roll: THREE.MathUtils.lerp(0, 1.25, e) };
+      }
+      // en el piso, de costado: él se encorva sobre la cámara
+      const k = Math.min(1, (t - 1.85) / 1.2);
+      const face = place(1.1 - 0.25 * k, 0.5 + 0.25 * k, 0.55);
+      const pos = eye.clone().addScaledVector(dir, 0.1).addScaledVector(side, 0.25);
+      pos.y = 0.22;
+      return { pos: pos.add(shake(0.01)), look: face, roll: 1.25 + Math.sin(t * 2) * 0.03 };
+    };
+    // sonido y efectos sincronizados
+    this.audio.play('stinger', { bus: 'ui', volume: 1.0, duration: 2.8 });
+    this.audio.play('scream', { pos: head(0.6, 1.9), volume: 1.3, delay: 0.18, duration: 1.4 });
+    this.camcorder.burst(0.9, 0.5, this.time, false);
+    this.look.shake(2.5);
+    if (navigator.vibrate) navigator.vibrate([250, 80, 400]);
+    await this.scheduler.wait(1.4);
+    this.audio.play('thud', { pos: eye.clone().setY(0.2), volume: 1.4 });
+    this.audio.play('static', { duration: 0.6, bus: 'ui', volume: 0.7 });
+    this.camcorder.burst(1, 0.7, this.time, false);
+    if (navigator.vibrate) navigator.vibrate(180);
+    await this.scheduler.wait(1.0);
+    this.audio.play('monsterBreath', { pos: head(0.55, 1.6), volume: 1.4 });
+    await this.scheduler.wait(0.9);
+    this.audio.play('scream', { pos: head(0.5, 1.6), volume: 1.0, duration: 0.9 });
+    this.camcorder.burst(1, 0.6, this.time, false);
+    await this.scheduler.wait(0.55);
   }
 
   /** Ganaste: con las tres cintas, la puerta de la pieza del fondo se abre y salís a la calle. */
@@ -814,9 +979,19 @@ export class Engine {
       const yaw = this.look.currentYaw(this.camera);
       if (this.phase === 'playing') this.player.update(dt, yaw, this.house.colliders);
       this.look.handheld = this.camcorder.on ? 1 : 0.35;
-      this.look.update(dt, this.time, this.camera, this.player.position, this.player.bob, this.player.bobPhase);
+      const eye = this.hiding?.hide ? this.hiding.hide.eye : this.player.position;
+      this.look.update(dt, this.time, this.camera, eye, this.hiding ? 0 : this.player.bob, this.player.bobPhase);
+      if (this.cine) {
+        const k = this.cine(this.time - this.cineStart);
+        this.camera.position.copy(k.pos);
+        this.camera.lookAt(k.look);
+        this.camera.rotateZ(k.roll);
+        this.camera.updateMatrixWorld();
+      }
       if (this.phase === 'playing') {
-        this.entity.update(dt, this.time, this.camera, this.camcorder.on, this.player.position);
+        this.entity.update(dt, this.time, this.camera, this.camcorder.on, eye);
+        if (this.hiding) this.updateHiding(dt);
+        this.updateDread(dt);
         this.director.update(dt);
       } else if (this.entity.mode === 'actor' && this.entity.present) {
         // cintas, captura y final: el monstruo sigue animado aunque el guion lo controle
@@ -831,8 +1006,8 @@ export class Engine {
       this.interactTimer -= dt;
       if (this.interactTimer <= 0 && this.phase === 'playing') {
         this.interactTimer = 0.12;
-        this.nearby = this.findNearby();
-        const label = this.nearby ? this.labelFor(this.nearby) : null;
+        this.nearby = this.hiding ? null : this.findNearby();
+        const label = this.hiding ? 'SALIR DEL ESCONDITE' : this.nearby ? this.labelFor(this.nearby) : null;
         store.set({ prompt: label });
       }
       this.publish -= dt;

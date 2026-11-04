@@ -107,6 +107,21 @@ es Three.js puro en clases TypeScript, que se compilan a JavaScript ES2022."
   rayo para ver si hay una pared en el medio: si está en el centro del visor y sin obstáculos, está "observado" y
   no se mueve.
 
+## 8 bis. Monstruo, escondites, sustos y tutorial
+
+- **IA** (`EntitySystem.updateHunt`): *roam* (va hacia donde cree que estás), *chase* (te ve: raycast desde su
+  cabeza hasta tus ojos, hasta 11 m), *search* (llega al último lugar donde te vio y mira alrededor) y *leave* (se
+  aleja y desaparece). Camina con `walk()`: sigue la ruta de la red de puntos y suena un paso cada ~0,7 s.
+- **Escondites** (`Engine.enterHide`): la cámara pasa abajo de la cama o detrás de la rendija del ropero (con un
+  overlay CSS). `setPlayerHidden()` decide si te vio entrar: si te estaba persiguiendo de cerca y con línea de
+  visión, va directo al escondite; si no, busca y se va.
+- **Cinemática** (`Engine.catchCinematic`): mientras dura, una función por tiempo pisa la posición y orientación de
+  la cámara después del `LookController`; apunta a la posición real del hueso de la cabeza (`Monster.headWorld`).
+- **Sonido de terror**: `stinger` cuando vuelve a aparecer en el visor, loop `chase` según la distancia, `suspense`
+  según la tensión, `heavyStep` en cada paso y `heartbeat` cuando está a menos de 5 m.
+- **Tutorial progresivo** (`Director.update`): cada aviso aparece una sola vez cuando hace falta, con la tecla o el
+  botón del dispositivo (`store.key`), y los objetivos nuevos se anuncian arriba (`store.newObjective`).
+
 ## 9. Preguntas probables
 
 **¿Por qué no usaron OrbitControls?** — Porque es primera persona: la cámara se controla con el giroscopio o el
@@ -118,8 +133,9 @@ dedo, que es lo que pide la consigna como alternativa ("movimiento por eventos t
 **¿Qué hace el post-proceso?** — `src/effects/PostFX.ts`: la escena se dibuja a una textura y un único shader le
 agrega ruido, scanlines, aberración cromática, glitches y la visión nocturna verde. Un solo pase = barato.
 
-**¿Los sonidos son archivos?** — No, se sintetizan con WebAudio (`src/audio/sounds.ts`) y se espacializan con
-`PannerNode` HRTF: por eso con auriculares se escucha de dónde viene.
+**¿Los sonidos son archivos?** — No: música, ambiente y efectos se sintetizan con WebAudio (`src/audio/sounds.ts`)
+y se espacializan con `PannerNode` HRTF (por eso con auriculares se escucha de dónde vienen los pasos). Las voces
+pueden ser la del navegador o grabaciones opcionales (ElevenLabs) — `docs/VOCES.md`.
 
 **¿Qué assets externos usaron?** — Tres modelos de Sketchfab (créditos en el README; el monstruo es CC BY-NC, uso
 no comercial) y una foto generada con IA. Todo lo demás es generado por código.

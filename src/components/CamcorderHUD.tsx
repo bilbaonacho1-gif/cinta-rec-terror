@@ -37,6 +37,7 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
   const ui = useUI();
   const msgOn = useTimed(ui.messageKey, 5200);
   const toastOn = useTimed(ui.toastKey, 2600);
+  const objOn = useTimed(ui.objectiveKey, 6500);
   const [gyroOn, setGyroOn] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setGyroOn(false), 6000);
@@ -56,6 +57,12 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
 
   return (
     <div className={`hud ${ui.glitch > 0.45 ? 'jitter' : ''}`}>
+      {ui.hiding && (
+        <div className={`hide-overlay ${ui.hiding}`} aria-hidden="true">
+          <i className="l" />
+          <i className="r" />
+        </div>
+      )}
       <div className={`vf ${vfOn ? 'on' : ''} ${playing ? 'tape' : ''}`}>
         <i className="corner tl" />
         <i className="corner tr" />
@@ -113,7 +120,10 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
       </div>
       <div className={`subs ${(playing || ui.radio) && ui.subtitle ? 'on' : ''}`}>{ui.subtitle}</div>
       <div className={`toast ${toastOn ? 'on' : ''}`}>{ui.toast}</div>
-      <div className={`message ${msgOn && !playing && !ui.radio && !ui.inspect && ui.promptTape === null ? 'on' : ''}`}>{ui.message}</div>
+      <div className="top-hints" aria-live="polite">
+        <div className={`message ${msgOn && !playing && !ui.radio && !ui.inspect && ui.promptTape === null ? 'on' : ''}`}>{ui.message}</div>
+        <div className={`objective-flash ${objOn && ui.objectiveKey > 0 && !playing && !ui.inspect && ui.promptTape === null ? 'on' : ''}`}>Nuevo objetivo: {ui.objective}</div>
+      </div>
       {ui.holdWalk && <div className="hold-chip" aria-live="polite">▲ CAMINANDO</div>}
       {ui.tapFx && <div key={ui.tapFx.key} className="tap-ring" style={{ left: ui.tapFx.x, top: ui.tapFx.y }} />}
       {ui.showFps && (
@@ -124,7 +134,7 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
       <div className={`gyro-status ${gyroOn ? 'on' : ''}`}>{ui.gyro === 'active' ? 'GYRO: ACTIVE' : 'GYRO: FALLBACK'}</div>
 
       <div className="controls">
-        {free && ui.touch && <Joystick engine={engine} />}
+        {free && ui.touch && !ui.hiding && <Joystick engine={engine} />}
         <button type="button" aria-label="Prender o apagar la cámara" className={`btn btn-rec ${free ? 'show' : ''} ${ui.cameraOn ? 'active' : ''}`} onPointerDown={press(() => engine.toggleCamera())}>
           <span className="dot">●</span> REC
         </button>
@@ -165,7 +175,6 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
           </div>
         </div>
       )}
-      {!ui.touch && gyroOn && free && <div className="keys-hint on">[C] CÁMARA · [N] VISIÓN NOCTURNA · [B] BATERÍA · WASD CAMINAR · RUEDA: ZOOM · [ESC] PAUSA</div>}
     </div>
   );
 }

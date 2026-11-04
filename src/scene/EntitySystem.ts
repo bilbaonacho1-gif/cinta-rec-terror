@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AudioSystem, LoopHandle } from '../audio/AudioSystem';
-import { chance, clamp, lerp, pick, rand } from '../core/math';
+import { chance, clamp, rand } from '../core/math';
 import { MonsterEntity, MonsterPose } from '../entities/Monster';
 import type { Waypoint } from '../types';
 import type { HouseBuilder } from './HouseBuilder';
@@ -37,7 +37,6 @@ export class EntitySystem {
   /** Tiempo total observada en el lugar actual. */
   private stareTotal = 0;
   private seenHere = false;
-  private stepDelay = 6;
   private cooldown = 0;
   private introSteps = 0;
   private raycaster = new THREE.Raycaster();
@@ -47,6 +46,26 @@ export class EntitySystem {
   private breathTimer = 0;
   private glide: { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; pose: MonsterPose; node: string | null } | null = null;
   private glideTick = 0;
+  // ---- caza: camina hacia el jugador, lo persigue, lo busca y se va
+  hunt: 'roam' | 'chase' | 'search' | 'leave' = 'roam';
+  private route: THREE.Vector3[] = [];
+  private target = new THREE.Vector3();
+  private lastKnown = new THREE.Vector3();
+  private huntTimer = 0;
+  private repathTimer = 0;
+  private perceiveTimer = 0;
+  private lostTimer = 0;
+  private stepTimer = 0;
+  private lastPos = new THREE.Vector3();
+  private playerHidden = false;
+  private sawHide = false;
+  private canSeePlayer = false;
+  private outOfFrameFor = 99;
+  private stingerCooldown = 0;
+  /** 0..1: intensidad de la música de persecución que pide la entidad. */
+  chaseLevel = 0;
+  /** Aparece en el visor después de un rato sin verlo: el motor dispara el golpe de susto. */
+  onSighting: (() => void) | null = null;
   onAttack: (() => void) | null = null;
   onFirstSeen: (() => void) | null = null;
   onIntroDone: (() => void) | null = null;
@@ -70,6 +89,15 @@ export class EntitySystem {
     this.introSteps = 0;
     const far = playerPos.z > -9 ? 'H5' : 'H0';
     this.placeAtNode(far, 'hang', playerPos);
+  }
+
+  /**
+   * El jugador entra o sale de un escondite. Si lo estaba persiguiendo de cerca y con línea de visión,
+   * lo vio entrar: va directo al escondite.
+   */
+  setPlayerHidden(hidden: boolean): void {
+    this.playerHidden = hidden;
+    this.sawHide = hidden && this.present && this.mode === 'stalking' && this.hunt === 'chase' && this.canSeePlayer && this.distance < 4.5;
   }
 
   startStalking(cooldown = 12): void {
@@ -138,7 +166,6 @@ export class EntitySystem {
     this.observedFor = 0;
     this.stareTotal = 0;
     this.seenHere = false;
-    this.stepDelay = this.nextDelay();
   }
 
   private vanish(sound = true): void {
@@ -149,10 +176,6 @@ export class EntitySystem {
     this.stopNear();
     this.setState('DISAPPEAR');
     if (sound) this.audio.play('whoosh', { pos: this.entity.root.position.clone().setY(1.5), volume: 0.35 });
-  }
-
-  private nextDelay(): number {
-    return lerp(7.5, 2.3, this.aggression) * rand(0.8, 1.2);
   }
 
   private nearestNode(p: THREE.Vector3): string {
@@ -262,9 +285,12 @@ export class EntitySystem {
       this.entity.root.visible = false;
       this.proximity = Math.max(0, this.proximity - dt);
       this.setState('HIDDEN');
+      this.chaseLevel = 0;
       if (this.mode === 'stalking' && this.cooldown <= 0) {
         const id = this.farthestNode(playerFloor, camera, cameraOn);
-        this.placeAtNode(id, pick(['stand', 'hang', 'lean'] as const), playerFloor);
+        this.placeAtNode(id, 'stand', playerFloor);
+        this.beginRoam(playerFloor);
+        this.audio.play('heavyStep', { pos: this.entity.root.position.clone().setY(0.1), volume: 1.2 });
       }
       return;
     }
@@ -273,6 +299,15 @@ export class EntitySystem {
     // regla principal: sólo existe para la cámara
     this.entity.root.visible = cameraOn;
     this.entity.animate(dt, time, this.observed || !this.inFrame);
+    // golpe de susto: vuelve a aparecer en el visor después de un rato sin verlo
+    this.stingerCooldown -= dt;
+    if (this.inFrame && cameraOn) {
+      if (this.outOfFrameFor > 6 && this.stingerCooldown <= 0 && this.distance < 14 && this.mode === 'stalking') {
+        this.stingerCooldown = 22;
+        this.onSighting?.();
+      }
+      this.outOfFrameFor = 0;
+    } else this.outOfFrameFor += dt;
 
     if (this.observed) {
       if (!this.everSeen) {
@@ -306,10 +341,13 @@ export class EntitySystem {
         }
       }
     } else if (this.mode === 'intro') this.updateIntro(camera, cameraOn, playerFloor);
-    else if (this.mode === 'stalking') this.updateStalk(camera, cameraOn, playerEye, playerFloor);
+    else if (this.mode === 'stalking') this.updateHunt(dt, camera, cameraOn, playerEye, playerFloor);
 
     if (!this.present) return;
-    this.setState(this.observed ? 'OBSERVED' : this.glide ? 'MOVING' : this.distance < 2.6 ? 'NEAR' : this.inFrame ? 'IDLE' : 'HIDDEN');
+    const moving = this.entity.root.position.distanceToSquared(this.lastPos) > 1e-6;
+    this.lastPos.copy(this.entity.root.position);
+    this.setState(this.observed ? 'OBSERVED' : this.glide || moving ? 'MOVING' : this.distance < 2.6 ? 'NEAR' : this.inFrame ? 'IDLE' : 'HIDDEN');
+    this.chaseLevel = this.mode === 'stalking' && this.hunt === 'chase' ? clamp(1.15 - this.distance / 10, 0.3, 1) : 0;
     this.proximity = cameraOn ? clamp(1 - (this.distance - 1.2) / 6, 0, 1) * (this.inFrame ? 1 : 0.5) : 0;
     this.updateAudio(dt);
   }
@@ -339,43 +377,163 @@ export class EntitySystem {
     }
   }
 
-  private updateStalk(camera: THREE.PerspectiveCamera, cameraOn: boolean, playerEye: THREE.Vector3, playerFloor: THREE.Vector3): void {
-    // sostenerle la mirada mucho tiempo desde lejos la hace irse (cuando dejás de apuntarle)
-    if (this.stareTotal > 7 && this.distance > 4 && this.unobserved > 0.5) {
-      this.vanish();
-      this.cooldown = rand(8, 15);
+  // ------------------------------------------------------------------ caza
+  private beginRoam(playerFloor: THREE.Vector3): void {
+    this.hunt = 'roam';
+    this.huntTimer = 0;
+    // sabe más o menos dónde estás: apunta a un punto cerca tuyo
+    const a = rand(0, Math.PI * 2);
+    this.lastKnown.copy(playerFloor).add(new THREE.Vector3(Math.cos(a) * 2, 0, Math.sin(a) * 2));
+    this.setTarget(this.house.waypoints.get(this.nearestNode(this.lastKnown))!.position);
+  }
+
+  private setTarget(p: THREE.Vector3): void {
+    this.target.copy(p).setY(0);
+    this.repathTimer = 0;
+  }
+
+  /** Ruta caminando: recta si hay vista directa en el mismo cuarto; si no, por la red de puntos (puertas). */
+  private repath(): void {
+    const from = this.entity.root.position;
+    const sameRoom = this.house.roomAt(from) === this.house.roomAt(this.target);
+    if (sameRoom && this.lineOfSight(from.clone().setY(1.0), this.target.clone().setY(1.0))) {
+      this.route = [this.target.clone()];
       return;
     }
+    const nodes = this.path(this.nearestNode(from), this.nearestNode(this.target));
+    this.route = nodes.map((id) => this.house.waypoints.get(id)!.position.clone());
+    this.route.push(this.target.clone());
+  }
 
-    const sameRoom = this.house.roomAt(this.entity.root.position) === this.house.roomAt(playerFloor);
-    const dist = this.distance;
-    if (dist < 1.5) {
-      if (this.unobserved > 1.0) this.attack();
-      return;
-    }
-    if (this.unobserved < this.stepDelay) return;
+  /** ¿Te ve? (línea de visión desde la cabeza, hasta 11 m, si no estás escondido) */
+  private perceive(playerEye: THREE.Vector3): boolean {
+    if (this.playerHidden) return this.sawHide;
+    const head = this.entity.root.position.clone().setY(1.8);
+    if (head.distanceTo(playerEye) > 11) return false;
+    return this.lineOfSight(head, playerEye);
+  }
 
-    let moved = false;
-    if (sameRoom && dist < 6.5 && this.lineOfSight(this.entity.probes[0].getWorldPosition(new THREE.Vector3()), playerEye)) {
-      // acercamiento final, en línea recta
-      const dir = playerFloor.clone().sub(this.entity.root.position).setY(0).normalize();
-      const len = Math.min(1.5, dist - 1.2);
-      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(rand(-0.25, 0.25));
-      const next = this.entity.root.position.clone().addScaledVector(dir, len).add(side);
-      moved = this.moveTo(next, dist - len < 2.4 ? 'reach' : pick(['lean', 'stand', 'crouch'] as const), null, camera, cameraOn, playerFloor, true);
-    } else {
-      const from = this.node ?? this.nearestNode(this.entity.root.position);
-      const route = this.path(from, this.nearestNode(playerFloor));
-      if (route.length) {
-        const wp = this.house.waypoints.get(route[0])!;
-        moved = this.moveTo(wp.position, pick(['stand', 'hang', 'lean'] as const), wp.id, camera, cameraOn, playerFloor);
-      } else moved = true;
+  private speed(): number {
+    if (this.hunt === 'chase') return 1.1 + this.aggression * 0.7;
+    if (this.hunt === 'leave') return 1.0;
+    return 0.75 + this.aggression * 0.3;
+  }
+
+  private updateHunt(dt: number, camera: THREE.PerspectiveCamera, cameraOn: boolean, playerEye: THREE.Vector3, playerFloor: THREE.Vector3): void {
+    this.huntTimer += dt;
+    // percepción cada 0,25 s
+    this.perceiveTimer -= dt;
+    if (this.perceiveTimer <= 0) {
+      this.perceiveTimer = 0.25;
+      this.canSeePlayer = this.perceive(playerEye);
+      if (this.canSeePlayer && this.hunt !== 'leave') {
+        if (this.hunt !== 'chase') this.huntTimer = 0;
+        this.hunt = 'chase';
+        this.lastKnown.copy(playerFloor);
+        this.lostTimer = 0;
+      } else if (this.hunt === 'chase') {
+        this.lostTimer += 0.25;
+        if (this.lostTimer > 2.5) {
+          // te perdió: va a buscarte al último lugar donde te vio
+          this.hunt = 'search';
+          this.huntTimer = 0;
+          this.setTarget(this.lastKnown);
+        }
+      }
     }
-    if (moved) {
-      this.unobserved = 0;
+
+    // mirarlo mucho tiempo de lejos lo espanta (cuando dejás de apuntarle se va)
+    if (this.stareTotal > 9 && this.distance > 5 && this.hunt !== 'leave') {
+      this.startLeave(camera, cameraOn, playerFloor);
       this.stareTotal = 0;
-      this.stepDelay = this.nextDelay();
-    } else this.unobserved = this.stepDelay - 0.5;
+    }
+
+    // objetivo según el estado
+    if (this.hunt === 'chase') {
+      this.repathTimer -= dt;
+      if (this.repathTimer <= 0) {
+        this.target.copy(this.lastKnown);
+        this.repathTimer = 0.8;
+        this.repath();
+      }
+    } else if (this.repathTimer <= 0) {
+      this.repathTimer = 99;
+      this.repath();
+    }
+
+    // te alcanzó
+    const dist = this.distance;
+    const catchable = !this.playerHidden || this.sawHide;
+    if (catchable && dist < 1.15) {
+      if (this.unobserved > 0.35) this.attack();
+      return;
+    }
+
+    // regla principal: mientras lo mirás por el visor, no se mueve
+    if (this.observed) return;
+
+    const arrived = this.walk(dt, playerFloor);
+    if (this.hunt === 'chase' && dist < 2.4 && this.entity.poseName !== 'reach') this.entity.setPose('reach');
+    else if (this.hunt !== 'chase' && this.entity.poseName === 'reach') this.entity.setPose('stand');
+
+    if (!arrived) return;
+    if (this.hunt === 'roam') {
+      // llegó a donde creía que estabas: busca un rato
+      this.hunt = 'search';
+      this.huntTimer = 0;
+    } else if (this.hunt === 'search') {
+      // mira alrededor
+      this.entity.root.rotation.y += dt * 1.6;
+      if (this.huntTimer > 5) {
+        if (this.playerHidden) this.startLeave(camera, cameraOn, playerFloor);
+        else this.beginRoam(playerFloor);
+      }
+    } else if (this.hunt === 'leave') {
+      if (!this.pointInView(this.entity.root.position, camera, cameraOn)) {
+        this.vanish(false);
+        this.cooldown = rand(10, 18) - this.aggression * 6;
+      }
+    }
+  }
+
+  private startLeave(camera: THREE.Camera, cameraOn: boolean, playerFloor: THREE.Vector3): void {
+    this.hunt = 'leave';
+    this.huntTimer = 0;
+    this.setTarget(this.house.waypoints.get(this.farthestNode(playerFloor, camera, cameraOn))!.position);
+  }
+
+  /** Camina por la ruta; devuelve true si ya llegó. Pasos pesados, cadenas y puertas que se abren a su paso. */
+  private walk(dt: number, playerFloor: THREE.Vector3): boolean {
+    const root = this.entity.root;
+    while (this.route.length && root.position.distanceTo(this.route[0]) < 0.25) this.route.shift();
+    const next = this.route[0];
+    if (!next) return true;
+    const sp = this.speed();
+    const dir = next.clone().sub(root.position).setY(0);
+    const len = dir.length();
+    root.position.addScaledVector(dir.normalize(), Math.min(len, sp * dt));
+    // mira hacia donde camina (o a vos, si te persigue de cerca)
+    const look = this.hunt === 'chase' && this.distance < 4 ? playerFloor.clone().sub(root.position) : dir;
+    const want = Math.atan2(look.x, look.z);
+    let d = want - root.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    root.rotation.y += d * Math.min(1, dt * 6);
+    // puerta del escritorio cerrada: la abre de un golpe
+    const study = this.house.doors.study;
+    if (!study.open && root.position.distanceTo(study.center.clone().setY(0)) < 1.1) {
+      study.setOpen(true, false, 3);
+      this.audio.play('doorOpen', { pos: study.center, volume: 1.4 });
+      this.audio.play('thud', { pos: study.center, volume: 1.0 });
+    }
+    // pasos
+    this.stepTimer -= dt;
+    if (this.stepTimer <= 0) {
+      this.stepTimer = 0.68 / (sp / 0.9);
+      const pos = root.position.clone().setY(0.1);
+      this.audio.play('heavyStep', { pos, volume: this.hunt === 'chase' ? 1.4 : 1.1, rate: rand(0.9, 1.1) });
+      if (chance(0.18)) this.audio.play('chains', { pos: pos.setY(0.4), duration: 0.8, volume: 0.7 });
+    }
+    return false;
   }
 
   private attack(): void {

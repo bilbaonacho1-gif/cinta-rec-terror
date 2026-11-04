@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { toTexture } from '../assets/canvas';
-import { almanac, cardboardSign, clockFace, familyPhoto, newspaper, notePaper, photoWall, storeSign, tapeLabel } from '../assets/images';
+import { almanac, cardboardSign, childDrawing, clockFace, familyPhoto, newspaper, notePaper, photoWall, storeSign, tapeLabel } from '../assets/images';
 import { getTextures } from '../assets/textures';
 import { createTVStaticMaterial } from '../effects/TVStaticMaterial';
 import { Door, DoorOptions } from '../entities/Door';
@@ -54,6 +54,7 @@ export class HouseBuilder {
       ['living', () => this.buildLivingRoom()],
       ['study', () => this.buildStudy()],
       ['store', () => this.buildStore()],
+      ['bedroom', () => this.buildBedroom()],
       ['shrine', () => this.buildShrine()],
     ];
     for (const [name, build] of rooms) {
@@ -222,7 +223,7 @@ export class HouseBuilder {
     const m = this.m;
     this.slabs(-1.5, 1.5, -18, 4, m.floorCalcarea);
     this.wall({ axis: 'z', pos: -1.5, from: 4, to: -18, side: 1, material: m.wallHall, openings: [{ at: 0.6, width: 1.1, top: 2.2 }, { at: -9.5, width: 1.0, top: 2.15 }] });
-    this.wall({ axis: 'z', pos: 1.5, from: 4, to: -18, side: -1, material: m.wallHall, openings: [{ at: -5.5, width: 1.6, top: 2.4 }] });
+    this.wall({ axis: 'z', pos: 1.5, from: 4, to: -18, side: -1, material: m.wallHall, openings: [{ at: 0.8, width: 1.0, top: 2.15 }, { at: -5.5, width: 1.6, top: 2.4 }] });
     this.wall({ axis: 'x', pos: 4, from: -1.5, to: 1.5, side: -1, material: m.wallEntrance, openings: [{ at: 0, width: 1.1, top: 2.2 }] });
 
     const front = this.door('front', { id: 'front', axis: 'x', pos: 4, at: 0, floorY: 0, width: 1.1, height: 2.2, swing: 1, locked: true });
@@ -233,7 +234,7 @@ export class HouseBuilder {
 
     this.place(P.rug(m, 1.0, 2.2), 0, 0, 2.2);
     this.place(P.coatRack(m), -1.1, 0, 3.4, 0, [0.4, 0.4]);
-    this.place(P.phoneTable(m), 1.2, 0, 1.0, -Math.PI / 2, [0.4, 0.55]);
+    this.place(P.phoneTable(m), 1.2, 0, -0.9, -Math.PI / 2, [0.4, 0.55]);
 
     // retratos: uno cambia cuando se lo mira a través de la cámara
     const normal = lam(toTexture(familyPhoto('normal'), { repeat: false }));
@@ -329,6 +330,9 @@ export class HouseBuilder {
     letter.rotation.set(-Math.PI / 2, 0, -0.4);
     this.item({ id: 'letter', kind: 'note', doc: 'letter', label: 'CARTA DEL ABUELO', position: v(6.35, 0.5, -5.0), reach: 2.0 });
 
+    // ropero viejo del living: se puede uno meter adentro
+    this.hideWardrobe('hide-living', 4.0, -2.32, Math.PI);
+
     // cinta 1 sobre la mesa ratona
     const tape = this.cassette('CINTA 01', 21);
     this.dynamic(tape, 6.35, 0.455, -5.45, 0.3);
@@ -396,6 +400,7 @@ export class HouseBuilder {
     this.item({ id: 'clipping', kind: 'note', doc: 'clipping', label: 'RECORTE DE DIARIO', position: v(-3.9, 1.5, -6.1) });
 
     this.place(P.cardboardBox(m, 0.6, 0.45, 0.5), -8.4, 0, -6.6, 0.3, [0.65, 0.55]);
+    this.hideWardrobe('hide-study', -8.7, -11.8, Math.PI / 2);
     this.place(P.rug(m, 2.2, 1.5), -5.8, 0, -9.4);
   }
 
@@ -599,6 +604,66 @@ export class HouseBuilder {
     }
   }
 
+  // ------------------------------------------------------------------ pieza de los chicos
+  /** La pieza de Lucía y Martín: dos camas con espacio abajo, un ropero y un dibujo en la pared. */
+  private buildBedroom(): void {
+    const m = this.m;
+    const X0 = 1.5;
+    const X1 = 7.5;
+    const Z0 = -1.95;
+    const Z1 = 3.6;
+    this.slabs(X0, X1, Z0, Z1, m.floorWood);
+    this.wall({ axis: 'x', pos: Z1, from: X0, to: X1, side: -1, material: m.wallBedroom, openings: [{ at: 5, width: 1.2, top: 2.1, bottom: 0.9 }] });
+    this.wall({ axis: 'x', pos: Z0, from: X0, to: X1, side: 1, material: m.wallBedroom });
+    this.wall({ axis: 'z', pos: X1, from: Z0, to: Z1, side: -1, material: m.wallBedroom });
+    this.wall({ axis: 'z', pos: X0, from: Z0, to: Z1, side: 1, material: m.wallBedroom, openings: [{ at: 0.8, width: 1.0, top: 2.15 }] });
+
+    this.place(P.windowUnit(m, 1.2, 1.2, 2.2), 5, 1.5, Z1 - 0.03, Math.PI);
+    this.addFixture(makeFixture('bedroomMoon', 'bedroom', v(5, 2.0, Z1 - 0.7), 0x5a78b8, 4, 6, 'steady'));
+
+    // dos camas con la cabecera contra la ventana; abajo se puede esconder
+    for (const [id, x, side] of [['hide-bedA', 3.0, 1], ['hide-bedB', 6.2, -1]] as const) {
+      this.place(P.bedWithSpace(m), x, 0, Z1 - 1.05, Math.PI, [1.0, 1.95]);
+      const eye = v(x + side * 0.3, 0.2, Z1 - 1.05);
+      this.item({
+        id,
+        kind: 'hide',
+        label: 'ESCONDERSE ABAJO DE LA CAMA',
+        position: v(x + side * 0.55, 0.35, Z1 - 1.05),
+        reach: 2.0,
+        hide: { type: 'bed', eye, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2, exit: v(x + side * 1.0, 1.6, Z1 - 1.05) },
+      });
+    }
+    // mesa de luz con un velador que se muere
+    this.place(P.table(m, 0.45, 0.4, 0.55), 4.6, 0, Z1 - 0.35, 0, [0.5, 0.45]);
+    const glow = glowMaterial(0xffb070, 1.4);
+    this.place(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.14, 10, 1, true), glow), 4.6, 0.68, Z1 - 0.35);
+    this.addFixture(makeFixture('bedLamp', 'bedroom', v(4.6, 0.8, Z1 - 0.5), 0xff9a58, 3, 4.5, 'dying', [glow]));
+
+    this.hideWardrobe('hide-bedroom', 5.4, Z0 + 0.32, 0);
+
+    // el dibujo de Martín: "el señor de la tele no le gusta que lo miren"
+    const drawing = planeMesh(0.5, 0.375, lam(toTexture(childDrawing(), { repeat: false })), 0, 0, 0);
+    this.dynamic(drawing, X1 - 0.075, 1.4, 0.6, -Math.PI / 2);
+    this.item({ id: 'drawing', kind: 'note', doc: 'drawing', label: 'DIBUJO', position: v(X1 - 0.08, 1.4, 0.6), reach: 2.2 });
+    this.place(P.rug(m, 1.6, 1.1), 4.6, 0, 1.0);
+    this.place(P.cardboardBox(m, 0.4, 0.3, 0.4), 7.0, 0, -1.2, 0.4, [0.45, 0.45]);
+  }
+
+  /** Ropero cerrado donde esconderse. rotY = hacia dónde miran las puertas (0 = +Z). */
+  private hideWardrobe(id: string, x: number, z: number, rotY: number): void {
+    this.place(P.closedWardrobe(this.m), x, 0, z, rotY, Math.abs(Math.sin(rotY)) > 0.5 ? [0.6, 1.15] : [1.15, 0.6]);
+    const fwd = v(Math.sin(rotY), 0, Math.cos(rotY));
+    this.item({
+      id,
+      kind: 'hide',
+      label: 'ESCONDERSE EN EL ROPERO',
+      position: v(x, 1.1, z).addScaledVector(fwd, 0.32),
+      reach: 2.0,
+      hide: { type: 'wardrobe', eye: v(x, 1.5, z).addScaledVector(fwd, 0.31), yaw: rotY + Math.PI, exit: v(x, 1.6, z).addScaledVector(fwd, 0.95) },
+    });
+  }
+
   // ------------------------------------------------------------------ objetos
   private cassette(label: string, seed: number): THREE.Group {
     const g = new THREE.Group();
@@ -625,7 +690,7 @@ export class HouseBuilder {
   private buildWaypoints(): void {
     const add = (id: string, room: string, x: number, z: number, links: string[]) => this.waypoints.set(id, { id, room, position: v(x, 0, z), links });
     add('H0', 'hallway', 0, 2.4, ['H1', 'HA']);
-    add('HA', 'hallway', 0, 0.6, ['H0', 'H1', 'A0']);
+    add('HA', 'hallway', 0, 0.7, ['H0', 'H1', 'A0', 'B0']);
     add('H1', 'hallway', 0, -1.5, ['H0', 'H2', 'HA']);
     add('H2', 'hallway', 0, -5.5, ['H1', 'H3', 'L0']);
     add('H3', 'hallway', 0, -9.5, ['H2', 'H4', 'S0']);
@@ -645,6 +710,10 @@ export class HouseBuilder {
     add('A1', 'store', -2.6, -2.6, ['A0', 'A2']);
     add('A2', 'store', -5.0, -3.4, ['A1', 'A3']);
     add('A3', 'store', -6.6, -0.4, ['A2', 'A0']);
+    add('B0', 'bedroom', 2.4, 0.8, ['HA', 'B1', 'B3']);
+    add('B1', 'bedroom', 4.6, 1.0, ['B0', 'B2', 'B3']);
+    add('B2', 'bedroom', 6.6, 0.6, ['B1', 'B3']);
+    add('B3', 'bedroom', 4.4, -0.8, ['B0', 'B1', 'B2']);
     add('R0', 'shrine', 0, -19.2, ['H5', 'R1', 'R2']);
     add('R1', 'shrine', -2.9, -20.3, ['R0', 'R3']);
     add('R2', 'shrine', 3.0, -20.6, ['R0', 'R4']);
@@ -656,7 +725,7 @@ export class HouseBuilder {
   /** Habitación en la que está un punto. */
   roomAt(p: THREE.Vector3): string {
     if (p.z < -18) return 'shrine';
-    if (p.x > 1.5) return 'living';
+    if (p.x > 1.5) return p.z > -1.95 ? 'bedroom' : 'living';
     if (p.x < -1.5) return p.z > -5.5 ? 'store' : 'study';
     return 'hallway';
   }

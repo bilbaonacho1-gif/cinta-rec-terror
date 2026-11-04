@@ -44,6 +44,14 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO', engine }: { onClo
         </p>
       </section>
 
+      <section>
+        <h3>🛏 ESCONDERSE</h3>
+        <p>
+          Si te persigue, metete <b>abajo de una cama</b> o <b>adentro de un ropero</b> ({ui.touch ? 'TOCAR' : 'E'}). Si no te vio entrar, te busca un rato y se va.
+          Escuchá sus <b>pasos</b>: te dicen dónde está.
+        </p>
+      </section>
+
       <section className="nv">
         <h3>👁 VISIÓN NOCTURNA — "RAYOS X"</h3>
         <p>

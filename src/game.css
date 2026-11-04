@@ -1281,3 +1281,82 @@ canvas.game-canvas {
     animation: none;
   }
 }
+
+/* ---------- escondites ---------- */
+.hide-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0; /* debajo de los botones y textos del HUD */
+}
+/* abajo de la cama: el colchón tapa la parte de arriba y los bordes quedan en penumbra */
+.hide-overlay.bed {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.9) 30%, rgba(0, 0, 0, 0.35) 46%, transparent 58%),
+    radial-gradient(ellipse 80% 60% at 50% 70%, transparent 40%, rgba(0, 0, 0, 0.85) 100%);
+}
+.hide-overlay.bed .l,
+.hide-overlay.bed .r {
+  position: absolute;
+  bottom: 0;
+  width: 7%;
+  height: 62%;
+  background: linear-gradient(90deg, #070605, #1a1410);
+}
+.hide-overlay.bed .l { left: 14%; }
+.hide-overlay.bed .r { right: 14%; transform: scaleX(-1); }
+/* adentro del ropero: dos puertas oscuras y una rendija vertical en el medio */
+.hide-overlay.wardrobe .l,
+.hide-overlay.wardrobe .r {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 41%;
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 3px, transparent 3px 26px),
+    linear-gradient(90deg, #050403, #120d09 85%, #1e1610);
+}
+.hide-overlay.wardrobe .l { left: 0; }
+.hide-overlay.wardrobe .r { right: 0; transform: scaleX(-1); }
+.hide-overlay.wardrobe {
+  background: radial-gradient(ellipse 30% 70% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+/* ---------- avisos arriba, estilo juego de terror ---------- */
+.top-hints {
+  position: absolute;
+  left: 50%;
+  top: calc(15% + var(--safe-t));
+  transform: translateX(-50%);
+  width: min(90vw, 760px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  pointer-events: none;
+  text-align: center;
+  z-index: 3;
+}
+.top-hints .message {
+  position: static;
+  transform: none;
+  width: auto;
+  font-size: clamp(13px, 2.3vmin, 19px);
+  letter-spacing: 0.06em;
+  line-height: 1.45;
+  color: #ece8dc;
+  text-shadow: 0 0 6px #000, 0 0 2px #000;
+}
+.objective-flash {
+  font-family: var(--mono);
+  font-size: clamp(13px, 2.3vmin, 19px);
+  letter-spacing: 0.06em;
+  color: #e9d27a;
+  text-shadow: 0 0 6px #000, 0 0 2px #000;
+  text-transform: none;
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+.objective-flash.on {
+  opacity: 1;
+}
