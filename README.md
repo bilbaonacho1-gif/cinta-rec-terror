@@ -5,6 +5,7 @@ Terror *found footage* en primera persona: Banfield, octubre de 1998. La familia
 hay algo que **sólo se ve a través de la cámara**.
 
 - 🎮 **Jugar:** https://cinta-rec-terror.vercel.app/ (pensado para celular, con auriculares)
+- 💻 **Repositorio:** https://github.com/bilbaonacho1-gif/cinta-rec-terror
 - 📱 **QR de acceso:** [`entrega/qr-cinta-rec-terror.png`](entrega/qr-cinta-rec-terror.png) · [SVG](entrega/qr-cinta-rec-terror.svg)
 - 🖼️ **Afiche A4 con el QR:** [`entrega/afiche-A4.png`](entrega/afiche-A4.png) (300 dpi) · [PDF](entrega/afiche-A4.pdf)
 - 🧱 **Mockup en contexto:** [`entrega/mockup.png`](entrega/mockup.png)
@@ -58,9 +59,10 @@ El objetivo es encontrar las 3 cintas VHS del inspector Salgado y salir por la p
 4. **La regla:** si lo tenés en el centro del visor, no se mueve. Nunca le des la espalda.
 
 **El monstruo te busca.** Camina por la casa hacia donde estás; se escuchan sus **pasos pesados** y las cadenas.
-Si te ve, te **persigue** (música de persecución y latidos). Si lo perdés de vista, va al último lugar donde te vio
-y busca. **Escondete** abajo de una cama o adentro de un ropero (pieza de los chicos, living y escritorio): si no te
-vio entrar, busca un rato y se va; si te vio, te saca. Cuando te atrapa hay una **cinemática**: te da vuelta hacia él,
+Si caminás cerca **te oye** aunque no te vea. Si te ve, te **persigue** casi tan rápido como vos (música de
+persecución y latidos). Si lo perdés de vista, va al último lugar donde te vio y busca. **Escondete** abajo de una
+cama o adentro de un ropero (pieza de los chicos, living y escritorio): si te vio entrar, te saca; si no, busca un
+rato y, si quedó cerca, a veces revisa el escondite. Cuando te atrapa hay una **cinemática**: te da vuelta hacia él,
 te agarra de la cara y la cámara cae al piso.
 
 **Ganar y perder**
