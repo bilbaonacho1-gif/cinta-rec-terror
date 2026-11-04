@@ -12,6 +12,8 @@ export class PlayerController {
   readonly position = new THREE.Vector3();
   /** Entrada del joystick táctil (-1..1). */
   readonly joystick = { x: 0, y: 0 };
+  /** Modo una mano: caminar hacia adelante mientras se mantiene apretada la pantalla. */
+  holdForward = false;
   enabled = false;
   speed = 1.85;
   bob = 0;
@@ -41,6 +43,7 @@ export class PlayerController {
   update(dt: number, yaw: number, colliders: Box2[]): void {
     let ix = this.joystick.x;
     let iz = -this.joystick.y;
+    if (this.holdForward && ix === 0 && iz === 0) iz = 0.75;
     if (this.enabled) {
       if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) iz += 1;
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) iz -= 1;

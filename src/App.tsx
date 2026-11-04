@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CamcorderHUD } from './components/CamcorderHUD';
 import { IntroScreen } from './components/IntroScreen';
 import { PauseMenu } from './components/PauseMenu';
-import { DocViewer, EndScreen, GameOverScreen } from './components/Screens';
+import { DocViewer, EndScreen, GameOverScreen, LostScreen } from './components/Screens';
+import { InspectOverlay } from './components/InspectOverlay';
 import { Engine } from './engine/Engine';
 import { store, useUI } from './engine/store';
 
@@ -28,11 +29,13 @@ export default function App() {
   return (
     <div ref={host} className="game-root">
       {engine && !introDone && <IntroScreen engine={engine} onDone={() => setIntroDone(true)} />}
-      {engine && introDone && ui.phase !== 'end' && ui.phase !== 'caught' && <CamcorderHUD engine={engine} />}
+      {engine && introDone && ui.phase !== 'end' && ui.phase !== 'caught' && ui.phase !== 'lost' && <CamcorderHUD engine={engine} />}
       {engine && ui.phase === 'paused' && <PauseMenu engine={engine} />}
       {engine && <DocViewer engine={engine} />}
+      {engine && <InspectOverlay engine={engine} />}
       {engine && ui.phase === 'caught' && <GameOverScreen engine={engine} />}
       {ui.phase === 'end' && <EndScreen />}
+      {ui.phase === 'lost' && <LostScreen />}
     </div>
   );
 }

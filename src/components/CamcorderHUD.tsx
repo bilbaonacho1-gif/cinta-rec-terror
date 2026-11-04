@@ -46,7 +46,7 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
   const tape = ui.tape;
   const playing = ui.phase === 'tape' && !!tape;
   const vfOn = ui.cameraOn || playing;
-  const free = ui.phase === 'playing' && !ui.doc && ui.promptTape === null;
+  const free = ui.phase === 'playing' && !ui.doc && !ui.inspect && ui.promptTape === null;
   const lvl = ui.battery;
   const press = (fn: () => void) => (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -86,6 +86,11 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
         <div className="bottom-left">
           <div className="date">{playing ? tape.date : 'OCT. 14 1998'}</div>
           <div className="time">{clock12(playing ? tape.clock : ui.clock)}</div>
+          {!playing && (
+            <div className={`lives ${ui.lives === 1 ? 'last' : ''}`} aria-label={`Rebobinados restantes: ${ui.lives}`} title="Rebobinados: las veces que te puede atrapar">
+              ◀◀ ×{ui.lives}
+            </div>
+          )}
         </div>
         <div className="bottom-right">
           <div className={`nv-label ${(playing ? tape.nv : ui.nightVision) ? 'on' : ''}`}>NIGHT VISION</div>
@@ -108,7 +113,8 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
       </div>
       <div className={`subs ${(playing || ui.radio) && ui.subtitle ? 'on' : ''}`}>{ui.subtitle}</div>
       <div className={`toast ${toastOn ? 'on' : ''}`}>{ui.toast}</div>
-      <div className={`message ${msgOn && !playing && !ui.radio ? 'on' : ''}`}>{ui.message}</div>
+      <div className={`message ${msgOn && !playing && !ui.radio && !ui.inspect && ui.promptTape === null ? 'on' : ''}`}>{ui.message}</div>
+      {ui.holdWalk && <div className="hold-chip" aria-live="polite">▲ CAMINANDO</div>}
       {ui.tapFx && <div key={ui.tapFx.key} className="tap-ring" style={{ left: ui.tapFx.x, top: ui.tapFx.y }} />}
       {ui.showFps && (
         <div className={`fps-meter ${ui.fps < 30 ? 'low' : ui.fps < 45 ? 'mid' : ''}`} aria-label="Cuadros por segundo">
@@ -119,34 +125,35 @@ export function CamcorderHUD({ engine }: { engine: Engine }) {
 
       <div className="controls">
         {free && ui.touch && <Joystick engine={engine} />}
-        <button type="button" className={`btn btn-rec ${free ? 'show' : ''} ${ui.cameraOn ? 'active' : ''}`} onPointerDown={press(() => engine.toggleCamera())}>
+        <button type="button" aria-label="Prender o apagar la cámara" className={`btn btn-rec ${free ? 'show' : ''} ${ui.cameraOn ? 'active' : ''}`} onPointerDown={press(() => engine.toggleCamera())}>
           <span className="dot">●</span> REC
         </button>
-        <button type="button" className={`btn btn-nv ${free ? 'show' : ''} ${ui.nightVision ? 'active' : ''} ${ui.hintNV && !ui.nightVision ? 'pulse' : ''}`} onPointerDown={press(() => engine.toggleNightVision())}>
+        <button type="button" aria-label="Visión nocturna" className={`btn btn-nv ${free ? 'show' : ''} ${ui.nightVision ? 'active' : ''} ${ui.hintNV && !ui.nightVision ? 'pulse' : ''}`} onPointerDown={press(() => engine.toggleNightVision())}>
           NV
         </button>
-        <button type="button" className={`btn btn-bat ${free && ui.batteries > 0 ? 'show' : ''}`} onPointerDown={press(() => engine.useBattery())}>
+        <button type="button" aria-label="Cambiar batería" className={`btn btn-bat ${free && ui.batteries > 0 ? 'show' : ''}`} onPointerDown={press(() => engine.useBattery())}>
           BAT +{ui.batteries > 1 ? ` ×${ui.batteries}` : ''}
         </button>
-        <button type="button" className={`btn btn-act ${free && ui.touch && ui.prompt ? 'show' : ''}`} onPointerDown={press(() => engine.interact())}>
+        <button type="button" aria-label="Interactuar" className={`btn btn-act ${free && ui.touch && ui.prompt ? 'show' : ''}`} onPointerDown={press(() => engine.interact())}>
           TOCAR
         </button>
-        <button type="button" className={`btn btn-zt ${free && ui.cameraOn ? 'show' : ''}`} onPointerDown={press(() => engine.zoom(0.5))}>
+        <button type="button" aria-label="Acercar zoom" className={`btn btn-zt ${free && ui.cameraOn ? 'show' : ''}`} onPointerDown={press(() => engine.zoom(0.5))}>
           T
         </button>
-        <button type="button" className={`btn btn-zw ${free && ui.cameraOn ? 'show' : ''}`} onPointerDown={press(() => engine.zoom(-0.5))}>
+        <button type="button" aria-label="Alejar zoom" className={`btn btn-zw ${free && ui.cameraOn ? 'show' : ''}`} onPointerDown={press(() => engine.zoom(-0.5))}>
           W
         </button>
-        <button type="button" className={`btn btn-menu ${free || playing ? 'show' : ''}`} onPointerDown={press(() => engine.pause())}>
+        <button type="button" aria-label="Pausa" className={`btn btn-menu ${free || playing ? 'show' : ''}`} onPointerDown={press(() => engine.pause())}>
           II
         </button>
-        <button type="button" className={`btn btn-stop ${playing && tape.t > 0.5 ? 'show' : ''}`} onPointerDown={press(() => engine.stopTape())}>
+        <button type="button" aria-label="Cortar la cinta" className={`btn btn-stop ${playing && tape.t > 0.5 ? 'show' : ''}`} onPointerDown={press(() => engine.stopTape())}>
           ■ STOP
         </button>
       </div>
 
       {ui.promptTape !== null && (
         <div className="prompt on">
+          <div className="prompt-hint">↻ Girala con el dedo para mirarla</div>
           <div className="prompt-text">Encontraste una cinta. ¿La ves ahora? (gasta batería)</div>
           <div className="prompt-row">
             <button type="button" className="btn-screen on primary" onClick={() => engine.answerTapePrompt(true)}>

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp, damp, noise1, wrapAngle } from '../core/math';
 import { GyroscopeController } from './GyroscopeController';
+import { a11y } from '../core/a11y';
 
 export type LookMode = 'gyro' | 'pointerlock' | 'drag';
 const PITCH_LIMIT = 1.22;
@@ -8,6 +9,8 @@ const PITCH_LIMIT = 1.22;
 export interface LookCallbacks {
   /** Toque o clic para interactuar: con coordenadas de pantalla si fue un toque (para el Raycaster). */
   tap: (x?: number, y?: number) => void;
+  /** Dedo apoyado y quieto más de 350 ms (modo una mano). */
+  hold: (on: boolean) => void;
   zoom: (delta: number) => void;
   lockLost: () => void;
 }
@@ -117,6 +120,7 @@ export class LookController {
   }
 
   shake(a: number): void {
+    if (a11y.reduceFlashing) a *= 0.25;
     this.shakeAmount = Math.max(this.shakeAmount, a);
   }
 
@@ -128,17 +132,62 @@ export class LookController {
 
   private onDown = (e: PointerEvent): void => {
     if (!this.enabled) return;
-    if (this.mode === 'pointerlock' && !this.locked && e.pointerType === 'mouse') {
+    if (this.mode === 'pointerlock' && !this.locked && e.pointerType === 'mouse' && !this.dragOverride) {
       this.requestLock();
       this.ignoreClick = true;
       return;
     }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: 0 });
-    if (this.pointers.size === 2) this.pinch = this.pinchDist();
+    if (this.pointers.size === 2) {
+      this.pinch = this.pinchDist();
+      this.stopHold();
+    }
+    // modo una mano: si el dedo queda apoyado y quieto, se camina hacia adelante
+    if (e.pointerType === 'touch' && this.pointers.size === 1 && !this.dragOverride) {
+      const id = e.pointerId;
+      clearTimeout(this.holdTimer);
+      this.holdTimer = window.setTimeout(() => {
+        const p = this.pointers.get(id);
+        if (p && p.moved < 14 && this.pointers.size === 1 && this.enabled) {
+          this.holding = true;
+          this.cb.hold(true);
+        }
+      }, 350);
+    }
   };
+
+  private holdTimer = 0;
+  private holding = false;
+
+  private stopHold(): void {
+    clearTimeout(this.holdTimer);
+    if (this.holding) {
+      this.holding = false;
+      this.cb.hold(false);
+    }
+  }
+
+  /** Si está definido, el arrastre gira un objeto inspeccionado en vez de mover la mirada. */
+  dragOverride: ((dx: number, dy: number) => void) | null = null;
 
   private onMove = (e: PointerEvent): void => {
     if (!this.enabled) return;
+    if (this.dragOverride && !this.locked) {
+      const q = this.pointers.get(e.pointerId);
+      if (!q) return;
+      const mx = e.clientX - q.x;
+      const my = e.clientY - q.y;
+      q.x = e.clientX;
+      q.y = e.clientY;
+      q.moved += Math.abs(mx) + Math.abs(my);
+      if (this.pointers.size >= 2) {
+        const d = this.pinchDist();
+        if (this.pinch > 0) this.cb.zoom((d - this.pinch) * 0.01);
+        this.pinch = d;
+      } else this.dragOverride(mx, my);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
     if (this.locked) {
       if (this.skipMoves > 0) {
         this.skipMoves--;
@@ -172,6 +221,9 @@ export class LookController {
   private onUp = (e: PointerEvent): void => {
     const p = this.pointers.get(e.pointerId);
     this.pointers.delete(e.pointerId);
+    const wasHolding = this.holding;
+    this.stopHold();
+    if (wasHolding) return; // soltar después de caminar no es un toque
     if (this.pointers.size < 2) this.pinch = 0;
     if (!this.enabled) return;
     if (this.locked && e.pointerType === 'mouse') {

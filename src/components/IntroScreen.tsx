@@ -91,10 +91,11 @@ export function IntroScreen({ engine, onDone }: { engine: Engine; onDone: () => 
           <button type="button" className="btn-screen on" disabled={busy || !ui.modelsReady} onClick={start}>
             {ui.modelsReady ? '[ INICIAR ]' : `CARGANDO… ${Math.round(ui.loadProgress * 100)}%`}
           </button>
+          <div className="intro-line small on warning">⚠ Contiene luces que parpadean y sustos. Podés reducir los parpadeos en las instrucciones o en la pausa.</div>
         </>
       )}
       {step === 'phones' && <div className="intro-line on">Ponete auriculares.</div>}
-      {step === 'help' && <HowToPlay onClose={() => setStep('activate')} />}
+      {step === 'help' && <HowToPlay engine={engine} onClose={() => setStep('activate')} />}
       {step === 'activate' && (
         <>
           <div className="intro-line on">Mové el celular para mirar alrededor.</div>

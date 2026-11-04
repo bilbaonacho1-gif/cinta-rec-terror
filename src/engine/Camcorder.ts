@@ -1,3 +1,4 @@
+import { a11y } from '../core/a11y';
 import * as THREE from 'three';
 import type { AudioSystem, LoopHandle } from '../audio/AudioSystem';
 import { chance, damp, lerp, rand } from '../core/math';
@@ -134,6 +135,7 @@ export class Camcorder {
 
   /** Pulso de interferencia (eventos, entidad). */
   burst(amount: number, duration: number, now: number, sound = true): void {
+    if (a11y.reduceFlashing) amount *= 0.3;
     this.pulses.push({ amount, start: now, end: now + duration });
     if (sound && this.on) this.audio.play('interference', { duration, volume: 0.4 + amount * 0.6, bus: 'ui' });
   }

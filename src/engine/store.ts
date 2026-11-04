@@ -36,6 +36,8 @@ export interface UIState {
   fps: number;
   /** Anillo de selección donde se tocó un objeto. */
   tapFx: { x: number; y: number; key: number } | null;
+  /** Objeto en inspección 3D (se gira con el dedo). */
+  inspect: { title: string; caption: string } | null;
   /** El botón de visión nocturna titila (está muy oscuro y no se usa). */
   hintNV: boolean;
   recSeconds: number;
@@ -46,10 +48,17 @@ export interface UIState {
   tape: TapeUI | null;
   hasCheckpoint: boolean;
   doc: { text?: string; image?: string; caption?: string } | null;
-  ending: { seconds: number } | null;
+  /** Resultado de la partida: ganaste (escapaste) o perdiste (sin rebobinados). */
+  ending: { seconds: number; won: boolean; tapes: number; watched: number; rewindsUsed: number; battery: number } | null;
+  /** Rebobinados que quedan: cada vez que te atrapa se gasta uno; con 0, perdés. */
+  lives: number;
   volume: number;
   sensitivity: number;
   voice: boolean;
+  /** Accesibilidad: menos glitches, temblores y parpadeos. */
+  reduceFlashing: boolean;
+  /** Modo una mano: se está caminando con la pantalla mantenida apretada. */
+  holdWalk: boolean;
   touch: boolean;
   promptTape: number | null;
 }
@@ -116,6 +125,7 @@ export const store = new Store({
   showFps: typeof location !== 'undefined' && /[?&]fps\b/.test(location.search),
   fps: 0,
   tapFx: null,
+  inspect: null,
   hintNV: false,
   recSeconds: 0,
   clock: 23 * 3600 + 47 * 60 + 10,
@@ -126,9 +136,12 @@ export const store = new Store({
   hasCheckpoint: false,
   doc: null,
   ending: null,
+  lives: 3,
   volume: 0.9,
   sensitivity: 1,
   voice: true,
+  reduceFlashing: false,
+  holdWalk: false,
   touch: typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches,
   promptTape: null,
 });

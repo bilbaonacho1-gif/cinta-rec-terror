@@ -12,7 +12,7 @@ export function PauseMenu({ engine }: { engine: Engine }) {
   if (help) {
     return (
       <div className="screen menu">
-        <HowToPlay onClose={() => setHelp(false)} closeLabel="VOLVER" />
+        <HowToPlay engine={engine} onClose={() => setHelp(false)} closeLabel="VOLVER" />
       </div>
     );
   }
@@ -30,6 +30,9 @@ export function PauseMenu({ engine }: { engine: Engine }) {
         <h3>INVENTARIO</h3>
         <div className="row">
           <span>CAMERA ✓</span>
+        </div>
+        <div className="row">
+          <span>REBOBINADOS ×{ui.lives} (vidas)</span>
         </div>
         <div className="row">
           <span>BATTERIES ×{ui.batteries}</span>
@@ -70,6 +73,12 @@ export function PauseMenu({ engine }: { engine: Engine }) {
           <span>VOZ EN LAS CINTAS</span>
           <button type="button" onClick={() => engine.setSetting('voice', !ui.voice)}>
             {ui.voice ? 'SÍ' : 'NO'}
+          </button>
+        </div>
+        <div className="row">
+          <span>REDUCIR PARPADEOS</span>
+          <button type="button" aria-pressed={ui.reduceFlashing} onClick={() => engine.setSetting('reduceFlashing', !ui.reduceFlashing)}>
+            {ui.reduceFlashing ? 'SÍ' : 'NO'}
           </button>
         </div>
         <div className="row">

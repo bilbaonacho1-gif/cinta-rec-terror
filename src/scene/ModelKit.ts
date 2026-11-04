@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { loadingManager } from '../engine/loading';
+import { makeGLTFLoader } from '../engine/loading';
 
 /**
  * Piezas sueltas de los modelos GLB (mate, termo, productos del almacén).
@@ -12,7 +11,7 @@ export class ModelKit {
   private materials = new Map<THREE.Material, THREE.MeshStandardMaterial>();
 
   async load(url: string, scale = 1, onProgress?: (e: ProgressEvent) => void): Promise<void> {
-    const gltf = await new GLTFLoader(loadingManager).loadAsync(url, onProgress);
+    const gltf = await makeGLTFLoader().loadAsync(url, onProgress);
     const root = gltf.scene;
     root.updateMatrixWorld(true);
     root.traverse((o) => {
@@ -87,7 +86,7 @@ export async function loadGLTF(urls: string[], onProgress?: (e: ProgressEvent) =
   let last: unknown = null;
   for (const url of urls) {
     try {
-      const g = await new GLTFLoader(loadingManager).loadAsync(url, onProgress);
+      const g = await makeGLTFLoader().loadAsync(url, onProgress);
       return { scene: g.scene, animations: g.animations };
     } catch (e) {
       last = e;

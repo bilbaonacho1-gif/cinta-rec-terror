@@ -1,10 +1,11 @@
+import type { Engine } from '../engine/Engine';
 import { useUI } from '../engine/store';
 
 /**
  * Explicación clara de cómo se juega: objetivo, la cámara, la regla del monstruo,
  * la visión nocturna ("rayos X" para ver en la oscuridad), la batería y los controles.
  */
-export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () => void; closeLabel?: string }) {
+export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO', engine }: { onClose: () => void; closeLabel?: string; engine?: Engine }) {
   const ui = useUI();
   const touch = ui.touch;
   return (
@@ -15,6 +16,16 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () =
         <h3>🎯 OBJETIVO</h3>
         <p>
           Encontrá las <b>3 cintas VHS</b> del inspector Salgado y salí por la <b>puerta de la pieza del fondo</b>.
+        </p>
+      </section>
+
+      <section className="winlose">
+        <h3>🏁 GANAR Y PERDER</h3>
+        <p>
+          <b className="win">GANÁS</b> si escapás por la puerta del fondo con las 3 cintas.
+          <br />
+          <b className="lose">PERDÉS</b> si el monstruo te atrapa <b>3 veces</b>: cada vez gastás un <b>rebobinado ◀◀</b> y volvés al último punto guardado.
+          Los que te quedan se ven arriba a la izquierda.
         </p>
       </section>
 
@@ -55,6 +66,7 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () =
           <ul>
             <li><b>Mirar:</b> mové el celular (giroscopio). Si no tenés giroscopio, arrastrá el dedo por la pantalla.</li>
             <li><b>Caminar:</b> el círculo de abajo a la izquierda.</li>
+            <li><b>Con una sola mano:</b> mantené el dedo apoyado en la pantalla y caminás hacia donde mirás.</li>
             <li><b>Agarrar / abrir / leer:</b> tocá el objeto en la pantalla (o apuntale con el centro y tocá TOCAR).</li>
             <li><b>REC:</b> prende y apaga la cámara · <b>NV:</b> visión nocturna · <b>BAT +:</b> cambiar batería.</li>
             <li><b>T / W:</b> zoom · <b>II:</b> pausa · <b>■ STOP:</b> cortar una cinta.</li>
@@ -67,6 +79,18 @@ export function HowToPlay({ onClose, closeLabel = 'ENTENDIDO' }: { onClose: () =
             <li><b>C:</b> cámara · <b>N:</b> visión nocturna · <b>B:</b> cambiar batería.</li>
             <li><b>Rueda o Z / X:</b> zoom · <b>Q:</b> cortar una cinta · <b>Esc:</b> pausa.</li>
           </ul>
+        )}
+      </section>
+
+      <section>
+        <h3>♿ ACCESIBILIDAD</h3>
+        <p>
+          El juego tiene <b>luces que parpadean, glitches y sustos</b>. Si te molestan, activá <b>REDUCIR PARPADEOS</b> (también está en la pausa).
+        </p>
+        {engine && (
+          <button type="button" className="howto-toggle" aria-pressed={ui.reduceFlashing} onClick={() => engine.setSetting('reduceFlashing', !ui.reduceFlashing)}>
+            REDUCIR PARPADEOS: {ui.reduceFlashing ? 'SÍ' : 'NO'}
+          </button>
         )}
       </section>
 

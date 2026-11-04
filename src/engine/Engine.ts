@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { almanac, familyPhoto } from '../assets/images';
+import { almanac, familyPhoto, photoBack } from '../assets/images';
+import { toTexture } from '../assets/canvas';
 import { AudioSystem, LoopHandle } from '../audio/AudioSystem';
 import { Scheduler } from '../core/Scheduler';
 import { clamp } from '../core/math';
@@ -17,8 +18,13 @@ import type { InteractiveItem, Phase } from '../types';
 import { Camcorder } from './Camcorder';
 import { finishAsset, trackAsset } from './loading';
 import { Radio } from './Radio';
+import { Inspector } from './Inspector';
+import { a11y } from '../core/a11y';
 import { TapePlayer } from './TapePlayer';
 import { store } from './store';
+
+/** Rebobinados por partida: cuántas veces te puede atrapar antes de perder. */
+export const MAX_LIVES = 3;
 
 const isMobile = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
@@ -52,6 +58,8 @@ export class Engine {
   readonly tapes: TapePlayer;
   readonly director: Director;
   readonly radio: Radio;
+  readonly inspector: Inspector;
+  private kit: ModelKit | null = null;
   readonly scheduler = new Scheduler();
   phase: Phase = 'intro';
   time = 0;
@@ -86,6 +94,11 @@ export class Engine {
 
     this.look = new LookController(this.renderer.domElement, this.gyro, {
       tap: (x, y) => this.interact(x === undefined || y === undefined ? undefined : { x, y }),
+      // modo una mano: mantener apretada la pantalla camina hacia donde mirás
+      hold: (on) => {
+        this.player.holdForward = on && this.canControl;
+        store.set({ holdWalk: this.player.holdForward });
+      },
       zoom: (d) => this.zoom(d),
       lockLost: () => {
         if (this.phase === 'playing' && !this.docOpen) this.pause();
@@ -96,6 +109,7 @@ export class Engine {
     this.entity = new EntitySystem(this.scene, this.house, this.audio);
     this.tapes = new TapePlayer(this.scene, this.entity, this.audio, this.camcorder);
     this.director = new Director(this);
+    this.inspector = new Inspector(this.camera);
     this.radio = new Radio(this.audio, this.house.refs.radio.getWorldPosition(new THREE.Vector3()));
     void this.loadModels();
 
@@ -145,12 +159,13 @@ export class Engine {
       }
     };
     const [desayuno, almacen, crawler] = await Promise.allSettled([
-      load('desayuno', 1.0, (p) => kit.loadFirst(urls('desayuno'), 0.085, p)),
-      load('almacen', 1.6, (p) => kit.loadFirst(urls('almacen'), 1, p)),
-      load('crawler', 1.0, (p) => loadGLTF(urls('crawler'), p)),
+      load('desayuno', 0.23, (p) => kit.loadFirst(urls('desayuno'), 0.085, p)),
+      load('almacen', 0.7, (p) => kit.loadFirst(urls('almacen'), 1, p)),
+      load('crawler', 0.8, (p) => loadGLTF(urls('crawler'), p)),
     ]);
     for (const r of [desayuno, almacen]) if (r.status === 'rejected') console.warn('Modelo no disponible:', r.reason);
     this.house.furnish(kit);
+    this.kit = kit;
     // el monstruo principal: el crawler sin piel, con sus animaciones
     if (crawler.status === 'fulfilled') this.entity.entity.useModel(crawler.value, 2.1);
     else console.warn('Monstruo GLB no disponible, se usa la figura procedural:', crawler.reason);
@@ -237,6 +252,10 @@ export class Engine {
   }
 
   zoom(delta: number): void {
+    if (this.inspector.active) {
+      this.inspector.zoom(delta);
+      return;
+    }
     if (!this.canControl || !this.camcorder.on) return;
     this.look.zoomTarget = clamp(this.look.zoomTarget + delta, 1, 3);
   }
@@ -288,25 +307,28 @@ export class Engine {
     this.audio.play('recBeep', { bus: 'ui' });
   }
 
-  setSetting(key: 'volume' | 'sensitivity' | 'voice', value: number | boolean): void {
+  setSetting(key: 'volume' | 'sensitivity' | 'voice' | 'reduceFlashing', value: number | boolean): void {
     if (key === 'volume') this.audio.setVolume(value as number);
+    if (key === 'reduceFlashing') a11y.reduceFlashing = value as boolean;
     if (key === 'sensitivity') this.look.sensitivity = value as number;
     if (key === 'voice') this.tapes.voiceEnabled = value as boolean;
     store.set({ [key]: value } as Partial<ReturnType<typeof store.get>>);
     try {
       const s = store.get();
-      localStorage.setItem('rec-carvajal', JSON.stringify({ volume: s.volume, sensitivity: s.sensitivity, voice: s.voice }));
+      localStorage.setItem('rec-carvajal', JSON.stringify({ volume: s.volume, sensitivity: s.sensitivity, voice: s.voice, reduceFlashing: s.reduceFlashing }));
     } catch {
       /* sin almacenamiento */
     }
   }
 
   private loadSettings(): void {
+    store.set({ reduceFlashing: a11y.reduceFlashing });
     try {
       const raw = localStorage.getItem('rec-carvajal');
       if (!raw) return;
-      const s = JSON.parse(raw) as { volume: number; sensitivity: number; voice: boolean };
-      store.set(s);
+      const s = JSON.parse(raw) as { volume: number; sensitivity: number; voice: boolean; reduceFlashing?: boolean };
+      store.set({ volume: s.volume, sensitivity: s.sensitivity, voice: s.voice, reduceFlashing: s.reduceFlashing ?? a11y.reduceFlashing });
+      a11y.reduceFlashing = s.reduceFlashing ?? a11y.reduceFlashing;
       this.look.sensitivity = s.sensitivity;
       this.tapes.voiceEnabled = s.voice;
     } catch {
@@ -323,8 +345,55 @@ export class Engine {
     return performance.now() - this.openedAt < 450;
   }
 
+  /**
+   * Inspección 3D: el objeto aparece frente a la cámara y se gira con el dedo (drag) o se acerca pellizcando.
+   * Mientras tanto el juego queda en pausa, como con los documentos.
+   */
+  private startInspect(object: THREE.Object3D, info: { title: string; caption: string } | null, size = 0.22, rotX = 0.35): void {
+    this.docOpen = true;
+    this.openedAt = performance.now();
+    this.look.exitLock();
+    this.look.dragOverride = (dx, dy) => this.inspector.drag(dx, dy);
+    this.inspector.show(object, size, rotX);
+    this.audio.play('paper', { bus: 'ui' });
+    store.set({ inspect: info });
+  }
+
+  private stopInspect(): void {
+    this.inspector.hide();
+    this.look.dragOverride = null;
+    store.set({ inspect: null });
+  }
+
+  /** Tarjeta de la foto de familia con frente (la foto) y dorso (anotación a mano). */
+  /** Pan con dulce de leche sobre la tabla, armado con piezas del modelo del desayuno. */
+  private breakfastGroup(): THREE.Object3D | null {
+    const tabla = this.kit?.get('Adds');
+    const dl = this.kit?.get('Dulce_de_leche');
+    if (!tabla) return null;
+    const g = new THREE.Group();
+    g.add(tabla);
+    if (dl) {
+      dl.position.set(0.24, 0, 0.02);
+      g.add(dl);
+    }
+    return g;
+  }
+
+  private photoCard(figure: boolean): THREE.Object3D {
+    const card = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(0.2, 0.172);
+    const front = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: toTexture(familyPhoto(figure ? 'figure' : 'normal'), { repeat: false }), roughness: 0.55 }));
+    const back = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: toTexture(photoBack(), { repeat: false }), roughness: 0.9 }));
+    back.rotation.y = Math.PI;
+    back.position.z = -0.0005;
+    card.add(front, back);
+    return card;
+  }
+
   closeDoc(): void {
     if (!this.docOpen || this.tooSoon()) return;
+    if (this.inspector.active) this.stopInspect();
     this.docOpen = false;
     store.set({ doc: null });
     this.last = performance.now();
@@ -342,6 +411,7 @@ export class Engine {
   /** Respuesta al encontrar una cinta: verla ahora o guardarla. */
   answerTapePrompt(play: boolean): void {
     if (this.tooSoon()) return;
+    this.stopInspect();
     const i = store.get().promptTape;
     store.set({ promptTape: null });
     this.docOpen = false;
@@ -510,8 +580,12 @@ export class Engine {
         this.director.setTension(0.2 + found.filter(Boolean).length * 0.25);
         this.director.wakeEntity(i === 0 ? 20 : 8);
         this.saveCheckpoint();
-        this.docOpen = true; // pausa breve mientras decide
-        this.look.exitLock();
+        // pausa breve mientras decide: la cinta se puede girar con el dedo
+        if (item.object) this.startInspect(item.object, null, 0.2, 1.15); // la etiqueta mirando a cámara
+        else {
+          this.docOpen = true;
+          this.look.exitLock();
+        }
         break;
       }
       case 'battery':
@@ -522,10 +596,17 @@ export class Engine {
         store.toast('BATTERY PACK +20%');
         store.message(s.touch ? 'Tocá BAT + para cambiar la batería cuando la necesites.' : '[B] para cambiar la batería cuando la necesites.');
         break;
-      case 'note':
+      case 'note': {
+        // el mate y el desayuno se inspeccionan en 3D (si el modelo cargó)
+        const model = item.doc === 'mate' ? this.kit?.get('Mate') : item.doc === 'breakfast' ? this.breakfastGroup() : null;
+        if (model) {
+          this.startInspect(model, { title: item.doc === 'mate' ? 'EL MATE DE SALGADO' : 'EL DESAYUNO DEL 9 DE OCTUBRE', caption: DOCUMENTS[item.doc as DocId] });
+          break;
+        }
         this.showDoc({ text: DOCUMENTS[(item.doc ?? 'board') as DocId], image: item.doc === 'almanac' ? almanac().canvas.toDataURL('image/jpeg', 0.9) : undefined });
         if (item.doc === 'letter') this.director.setTension(0.25);
         break;
+      }
       case 'radio':
         this.radio.toggle(this.director.introDone, () => this.director.radioScare());
         break;
@@ -533,7 +614,7 @@ export class Engine {
         const fig = this.director.introDone && this.camcorder.on;
         const floor = item.id.startsWith('floorphoto');
         const caption = floor ? (fig ? DOCUMENTS.floorPhotoFigureCaption : DOCUMENTS.floorPhotoCaption) : fig ? DOCUMENTS.portraitFigureCaption : DOCUMENTS.portraitCaption;
-        this.showDoc({ image: familyPhoto(fig ? 'figure' : 'normal').canvas.toDataURL('image/jpeg', 0.9), caption });
+        this.startInspect(this.photoCard(fig), { title: floor ? 'FOTO EN EL PISO' : 'RETRATO DE FAMILIA', caption: `${caption}\nDale vuelta: atrás tiene algo escrito.` }, 0.24, 0.12);
         break;
       }
       case 'door':
@@ -599,11 +680,30 @@ export class Engine {
     store.message(store.get().batteries > 0 ? 'Sin batería. Cambiala antes de que se acerque.' : 'Sin batería. Ahora no podés verlo.');
   }
 
+  /** Datos de la partida para las pantallas de ganar y perder. */
+  private result(won: boolean): NonNullable<ReturnType<typeof store.get>['ending']> {
+    const s = store.get();
+    return {
+      seconds: this.time,
+      won,
+      tapes: s.tapesFound.filter(Boolean).length,
+      watched: s.tapesWatched.filter(Boolean).length,
+      rewindsUsed: MAX_LIVES - s.lives,
+      battery: this.camcorder.display,
+    };
+  }
+
+  /**
+   * Te atrapó: se gasta un rebobinado. Si quedan, la pantalla "SEÑAL PERDIDA" deja rebobinar al último
+   * punto guardado; si era el último, se pierde la partida.
+   */
   private async onCaught(): Promise<void> {
     this.phase = 'caught';
     this.radio.stop();
     this.look.exitLock();
     this.player.enabled = false;
+    const lives = Math.max(0, store.get().lives - 1);
+    store.set({ lives });
     if (!this.camcorder.on) this.camcorder.powerOn(true);
     const eye = this.camera.position.clone();
     const dir = this.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
@@ -616,13 +716,37 @@ export class Engine {
     this.audio.play('interference', { duration: 1.3, bus: 'ui' });
     if (navigator.vibrate) navigator.vibrate([200, 100, 300]);
     await this.scheduler.wait(1.3);
+    if (lives > 0) {
+      this.camcorder.forcedBlack = 1;
+      this.audio.silence('none');
+      this.player.enabled = true;
+      store.set({ phase: 'caught' });
+      return;
+    }
+    // sin rebobinados: la cámara se apaga y vuelve a prenderse sola, con él pegado a la lente
     this.camcorder.forcedBlack = 1;
-    this.audio.silence('none');
-    this.player.enabled = true;
-    store.set({ phase: 'caught' });
+    this.audio.silence('roomTone');
+    this.entity.actor(null);
+    await this.scheduler.wait(2.2);
+    this.audio.play('monsterBreath', { pos: this.camera.position.clone().add(this.camera.getWorldDirection(new THREE.Vector3())), volume: 1.3 });
+    await this.scheduler.wait(2.4);
+    this.camcorder.forcedBlack = 0;
+    this.audio.play('recBeep', { bus: 'ui' });
+    const eye2 = this.camera.position.clone();
+    const dir2 = this.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+    this.entity.actor(eye2.clone().addScaledVector(dir2, 1.0).setY(0), eye2.clone().setY(0), 'close');
+    this.entity.entity.setSkinGlow(3);
+    this.camcorder.burst(0.5, 2, this.time);
+    this.audio.play('static', { duration: 1.6, bus: 'ui', volume: 0.6 });
+    await this.scheduler.wait(1.6);
+    this.camcorder.forcedBlack = 1;
+    this.audio.setVolume(0);
+    this.entity.actor(null);
+    this.phase = 'lost';
+    store.set({ phase: 'lost', ending: this.result(false) });
   }
 
-  /** Final: la puerta se abre... y la casa no te deja ir. */
+  /** Ganaste: con las tres cintas, la puerta de la pieza del fondo se abre y salís a la calle. */
   private async ending(): Promise<void> {
     this.phase = 'ending';
     this.radio.stop();
@@ -636,39 +760,21 @@ export class Engine {
     this.audio.play('doorOpen', { pos: exit.center, duration: 2.4, volume: 1.2 });
     this.audio.play('swell', { duration: 4, volume: 0.7 });
     this.camcorder.burst(0.6, 2.5, this.time);
+    // detrás, en la casa, las cadenas se alejan
+    this.audio.play('chains', { pos: this.camera.position.clone().add(new THREE.Vector3(0, -1, 5)), duration: 2.5, volume: 0.9 });
     await this.scheduler.wait(2.2);
     this.camcorder.whiteout = 1;
-    await this.scheduler.wait(1.6);
-    // BATTERY 0% — la cámara se apaga
+    await this.scheduler.wait(1.4);
+    // afuera: amanece en Banfield (perros a lo lejos, un colectivo por la avenida)
+    this.audio.silence('none');
+    this.audio.play('trafficPass', { duration: 6, volume: 0.8 });
+    this.audio.play('dogBark', { volume: 0.35, delay: 1.2 });
+    await this.scheduler.wait(2.6);
+    const result = this.result(true);
     this.camcorder.whiteout = 0;
-    this.camcorder.battery = 0;
-    this.camcorder.frozenBattery = true;
-    this.camcorder.powerOff(true);
     this.camcorder.forcedBlack = 1;
-    this.audio.silence('roomTone');
-    // de vuelta en el pasillo, en el mismo lugar donde empezaste
-    exit.setOpen(false, true);
-    this.player.reset(SPAWN);
-    await this.scheduler.wait(3.5);
-    this.audio.play('monsterBreath', { pos: this.camera.position.clone().add(this.camera.getWorldDirection(new THREE.Vector3())), volume: 1 });
-    await this.scheduler.wait(4.4);
-    this.audio.play('monsterBreath', { pos: this.camera.position.clone().add(this.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(0.7)), volume: 1.3 });
-    await this.scheduler.wait(4.0);
-    // REC: la cámara vuelve a encenderse sola
-    this.camcorder.forcedBlack = 0;
-    this.camcorder.powerOn(true);
-    this.audio.play('recBeep', { bus: 'ui' });
-    const eye = this.camera.position.clone();
-    const dir = this.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
-    this.entity.actor(eye.clone().addScaledVector(dir, 1.15).setY(0), eye.clone().setY(0), 'close');
-    this.entity.entity.setSkinGlow(3);
-    this.camcorder.burst(0.45, 2, this.time);
-    this.audio.play('static', { duration: 1.6, bus: 'ui', volume: 0.5 });
-    await this.scheduler.wait(1.8);
-    this.camcorder.forcedBlack = 1;
-    this.audio.setVolume(0);
     this.phase = 'end';
-    store.set({ phase: 'end', ending: { seconds: this.time } });
+    store.set({ phase: 'end', ending: result });
   }
 
   // ------------------------------------------------------------------ loop
@@ -698,6 +804,7 @@ export class Engine {
     const raw = (now - this.last) / 1000;
     this.last = now;
     const dt = Math.min(raw, 0.1);
+    this.inspector.update(dt);
     const running = this.phase === 'playing' || this.phase === 'tape' || this.phase === 'caught' || this.phase === 'ending';
     const frozen = this.docOpen || store.get().promptTape !== null;
 

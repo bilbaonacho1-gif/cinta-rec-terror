@@ -36,4 +36,4 @@ export interface Waypoint {
   links: string[];
 }
 
-export type Phase = 'intro' | 'playing' | 'paused' | 'tape' | 'event' | 'caught' | 'ending' | 'end';
+export type Phase = 'intro' | 'playing' | 'paused' | 'tape' | 'event' | 'caught' | 'ending' | 'end' | 'lost';

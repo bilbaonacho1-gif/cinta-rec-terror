@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#070707"/>
+  <path d="M84 120V84h36M392 84h36v36M428 392v36h-36M120 428H84v-36" fill="none" stroke="#ebe7dc" stroke-width="14"/>
+  <circle cx="256" cy="226" r="78" fill="#e3342f"/>
+  <text x="256" y="388" text-anchor="middle" font-family="JetBrains Mono, DejaVu Sans Mono, monospace" font-weight="800" font-size="92" fill="#ebe7dc" letter-spacing="6">REC</text>
+</svg>

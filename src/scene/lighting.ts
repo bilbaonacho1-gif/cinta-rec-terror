@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { noise1, rand } from '../core/math';
+import { a11y } from '../core/a11y';
 type RoomId = string;
 
 export type FlickerMode = 'steady' | 'soft' | 'broken' | 'tv' | 'dying';
@@ -98,11 +99,14 @@ export class LightPool {
       case 'soft':
         return 0.82 + noise1(t * 6 + s) * 0.18 - (noise1(t * 0.7 + s) > 0.88 ? 0.5 : 0);
       case 'broken': {
+        // con "reducir parpadeos" las lámparas rotas sólo bajan y suben suave (nada estroboscópico)
+        if (a11y.reduceFlashing) return 0.55 + noise1(t * 1.5 + s) * 0.25;
         const burst = noise1(t * 0.9 + s);
         if (burst > 0.62) return noise1(t * 40 + s) > 0.5 ? 1 : 0.05;
         return 0.9 + noise1(t * 8 + s) * 0.1;
       }
       case 'dying': {
+        if (a11y.reduceFlashing) return 0.15 + noise1(t * 1.2 + s) * 0.3;
         const base = noise1(t * 1.3 + s);
         return base > 0.55 ? (noise1(t * 30 + s) > 0.4 ? 0.7 : 0.0) : 0.02;
       }

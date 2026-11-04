@@ -8,6 +8,7 @@ hay algo que **sólo se ve a través de la cámara**.
 - 📱 **QR de acceso:** [`entrega/qr-cinta-rec-terror.png`](entrega/qr-cinta-rec-terror.png) · [SVG](entrega/qr-cinta-rec-terror.svg)
 - 🖼️ **Afiche A4 con el QR:** [`entrega/afiche-A4.png`](entrega/afiche-A4.png) (300 dpi) · [PDF](entrega/afiche-A4.pdf)
 - 🧱 **Mockup en contexto:** [`entrega/mockup.png`](entrega/mockup.png)
+- 🎤 **Guía para la defensa:** [`docs/DEFENSA.md`](docs/DEFENSA.md)
 
 | | |
 |---|---|
@@ -36,12 +37,29 @@ El objetivo es encontrar las 3 cintas VHS del inspector Salgado y salir por la p
   La historia toma la leyenda del **Familiar** de los ingenios de Tucumán.
 - **Paleta**: ámbar de lámparas viejas contra negros profundos; verde fósforo para la visión nocturna; rojo REC.
 
+### Capturas
+
+| Pasillo | Visión nocturna | Almacén | Inspección 3D | Cómo se juega |
+|---|---|---|---|---|
+| ![](entrega/capturas/01-pasillo.jpg) | ![](entrega/capturas/02-vision-nocturna.jpg) | ![](entrega/capturas/03-almacen.jpg) | ![](entrega/capturas/04-inspeccion-3d.jpg) | ![](entrega/capturas/05-como-se-juega.jpg) |
+
+| Ganaste | Perdiste |
+|---|---|
+| ![](entrega/capturas/06-ganaste.jpg) | ![](entrega/capturas/07-perdiste.jpg) |
+
 ## 2. Cómo se juega
 
 1. Escaneá el QR, ponete **auriculares** y tocá **INICIAR** (se habilita cuando terminan de cargar los modelos 3D).
 2. Leé **"Cómo se juega"** y tocá **ACTIVAR CÁMARA** (pide permiso para el giroscopio en iPhone).
 3. Prendé **REC** para ver lo que el ojo no ve. Si está muy oscuro, **NV** (el botón titila para avisarte).
 4. **La regla:** si lo tenés en el centro del visor, no se mueve. Nunca le des la espalda.
+
+**Ganar y perder**
+- 🟢 **GANÁS** si encontrás las **3 cintas VHS** y salís por la puerta de la pieza del fondo → pantalla **ESCAPASTE**
+  con tus estadísticas (tiempo, cintas vistas, rebobinados usados, batería).
+- 🔴 **PERDÉS** si el monstruo te atrapa **3 veces**. Cada vez gastás un **rebobinado ◀◀** (se ven arriba a la izquierda)
+  y volvés al último punto guardado; sin rebobinados → pantalla **PERDISTE**.
+- Cada cinta que encontrás lo vuelve más agresivo; la batería es limitada (3 packs de +20 %).
 
 La pantalla "Cómo se juega" también está en la pausa (II).
 
@@ -50,16 +68,18 @@ La pantalla "Cómo se juega" también está en la pausa (II).
 | Acción | Celular | Compu |
 |---|---|---|
 | Mirar | **mover el celular** (giroscopio); sin giroscopio, arrastrar el dedo | mouse (clic para capturarlo) |
-| Caminar | **joystick táctil** (abajo a la izquierda) | W A S D / flechas |
+| Caminar | **joystick táctil** (abajo a la izquierda) o **dejar el dedo apoyado** (modo una mano) | W A S D / flechas |
 | Agarrar / abrir / leer | **tocar el objeto en la pantalla** (Raycaster) o apuntar con el centro y tocar | E / espacio / clic |
+| Inspeccionar (cinta, foto, mate, desayuno) | **arrastrar para girar** el objeto 3D · **pellizcar** para acercar | arrastrar con el mouse · rueda |
 | Cámara · Visión nocturna | **REC** · **NV** | C · N |
 | Zoom | **T / W** o **pellizcar con dos dedos** | rueda o Z / X |
 | Cambiar batería | **BAT +** | B |
 | Cortar una cinta · Pausa | **■ STOP** · **II** | Q · Esc |
 
 Interacciones de la escena: prender la radio del almacén, abrir y cerrar puertas, leer documentos (informe, carta,
-almanaque, libreta de fiado), mirar la foto de familia (con la cámara cambia), agarrar cintas y baterías y ver las
-cintas VHS (se reproducen *dentro* de la casa, renderizada desde donde fueron grabadas).
+almanaque, libreta de fiado), **girar en 3D** las cintas, la foto de familia (con la cámara aparece algo atrás; al
+darla vuelta tiene algo escrito), el mate y el desayuno, agarrar baterías y ver las cintas VHS (se reproducen
+*dentro* de la casa, renderizada desde donde fueron grabadas).
 
 ## 4. Requisitos técnicos de la consigna
 
@@ -75,8 +95,9 @@ cintas VHS (se reproducen *dentro* de la casa, renderizada desde donde fueron gr
 ### A2. Interactividad
 - **Mecanismos táctiles**: giroscopio (`DeviceOrientation` con cuaternión), **joystick táctil** (Pointer Events
   con captura), **selección con `Raycaster`** desde el punto tocado (volúmenes invisibles por objeto, con
-  oclusión por paredes y anillo de feedback), **botones UI superpuestos**, **pinch zoom**, arrastre para mirar.
-  → `src/controllers/LookController.ts`, `src/components/Joystick.tsx`, `Engine.pickAt()`
+  oclusión por paredes y anillo de feedback), **drag/rotate de objetos** en la inspección 3D (con inercia y pinch
+  zoom), **mantener apretado para caminar** (una mano), **botones UI superpuestos**, arrastre para mirar.
+  → `src/controllers/LookController.ts`, `src/components/Joystick.tsx`, `Engine.pickAt()`, `src/engine/Inspector.ts`
 - **Animaciones**: `AnimationMixer` con los clips del monstruo (idle / walk / attack; se congela cuando lo
   observás) y animaciones procedurales en `requestAnimationFrame` (puertas, péndulo, parpadeo de luces,
   balanceo de cámara en mano). → `src/entities/Monster.ts`, `Engine.frame()`
@@ -89,11 +110,18 @@ cintas VHS (se reproducen *dentro* de la casa, renderizada desde donde fueron gr
 ### B. Optimización Mobile-First
 - **Polígonos y texturas**: geometría estática **fusionada por material** (pocas draw calls), modelos de pocos
   vértices (monstruo ≈ 2.900), texturas WebP de 1024 px máx., luces en pool fijo (no recompila shaders).
+- **Peso de descarga**: geometría de los GLB comprimida con **Draco** (3,6 MB → 1,7 MB; decodificador WASM en
+  `public/draco/`); los tres modelos bajan en paralelo.
 - **Resize y PixelRatio**: `renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))` en cada resize y cambio de
   orientación; post-proceso a resolución interna adaptativa (baja si los FPS caen de 45).
 - **Medidor de FPS**: pausa → *MEDIDOR DE FPS*, o abrir con `?fps` en la URL.
 - **UI/UX**: HUD de videocámara en HTML/CSS superpuesto, botones grandes (≥ 48 px) en las esquinas
-  para los pulgares, áreas seguras (*notch*), textos que se pueden scrollear en pantallas bajas.
+  para los pulgares, **modo una mano** (dedo apoyado = caminar), áreas seguras (*notch*), textos que se pueden
+  scrollear en pantallas bajas, pantalla de ayuda al empezar y en la pausa.
+- **Accesibilidad**: aviso de luces que parpadean, opción **REDUCIR PARPADEOS** (baja glitches, temblores y el
+  parpadeo estroboscópico; se activa sola con `prefers-reduced-motion`), `aria-label` en los botones del HUD.
+- **Instalable / compartible**: `manifest.webmanifest` (pantalla completa al agregarlo a la pantalla de inicio),
+  íconos propios y vista previa Open Graph (`og.jpg`) al compartir el link por WhatsApp o redes.
 - **Loader**: pantalla de arranque mientras baja el JavaScript y **barra de carga con porcentaje** de los
   modelos 3D (`THREE.LoadingManager` + progreso en bytes); *INICIAR* se habilita al terminar.
   → `src/engine/loading.ts`, `src/components/IntroScreen.tsx`
@@ -107,7 +135,8 @@ cintas VHS (se reproducen *dentro* de la casa, renderizada desde donde fueron gr
 
 ```
 src/
-  engine/        Engine (loop, acciones, Raycaster), store de UI, carga de assets, cámara, cintas, radio
+  engine/        Engine (loop, acciones, Raycaster, ganar/perder), store de UI, carga de assets (Draco),
+                 inspección 3D, cámara, cintas, radio
   scene/         Casa (HouseBuilder), luces y sombras, props procedurales, ModelKit (GLB), entidad
   entities/      Monstruo (GLB + AnimationMixer), humanoide procedural, puertas
   controllers/   Mirada (giroscopio / táctil / mouse), jugador con colisiones, giroscopio
@@ -150,6 +179,7 @@ npm run dev:https    # para probar el giroscopio desde el celular en la misma re
 Los modelos se optimizaron para celular (texturas WebP, sin mapas de normales). Detalle en `public/models/CREDITS.md`.
 
 **Otros**
+- Decodificador Draco: el de Three.js (`three/examples/jsm/libs/draco`, Apache 2.0).
 - Foto de familia: imagen generada con IA, aportada por el equipo (`public/img/familia.webp`).
 - Texturas, sonidos y voces: generados por código (canvas, WebAudio y `speechSynthesis`); no se usan archivos externos.
 - Tipografías del afiche: Inter y JetBrains Mono (SIL Open Font License).

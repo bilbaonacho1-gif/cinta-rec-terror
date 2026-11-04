@@ -32,10 +32,28 @@ export function Credits() {
   );
 }
 
-const GAMEOVER_DELAYS = [1400, 1200, 600];
+const fmtTime = (secs: number) => `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
 
+/** Resumen de la partida (pantallas de ganar y perder). */
+function Stats({ won }: { won: boolean }) {
+  const e = useUI().ending;
+  if (!e) return null;
+  return (
+    <dl className={`stats ${won ? 'won' : 'lost'}`}>
+      <div><dt>TIEMPO</dt><dd>{fmtTime(e.seconds)}</dd></div>
+      <div><dt>CINTAS</dt><dd>{e.tapes}/3{won ? ` · vistas ${e.watched}` : ''}</dd></div>
+      <div><dt>REBOBINADOS USADOS</dt><dd>{e.rewindsUsed}/3</dd></div>
+      <div><dt>BATERÍA</dt><dd>{e.battery}%</dd></div>
+    </dl>
+  );
+}
+
+const GAMEOVER_DELAYS = [1200, 1100, 600];
+
+/** Te atrapó, pero quedan rebobinados: volvés al último punto guardado. */
 export function GameOverScreen({ engine }: { engine: Engine }) {
-  const lines = ['SEÑAL PERDIDA', 'El Familiar cobró uno más.', '"Mientras lo tengas en el visor, no se mueve."'];
+  const lives = useUI().lives;
+  const lines = ['SEÑAL PERDIDA', `Te atrapó. Te ${lives === 1 ? 'queda 1 rebobinado' : `quedan ${lives} rebobinados`}.`, '"Mientras lo tengas en el visor, no se mueve."'];
   const n = useReveal(lines.length, GAMEOVER_DELAYS);
   return (
     <div className="screen">
@@ -47,6 +65,11 @@ export function GameOverScreen({ engine }: { engine: Engine }) {
           </p>
         ))}
       </div>
+      <div className="lives-row" aria-label={`Rebobinados restantes: ${lives}`}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} className={i < lives ? 'on' : ''}>◀◀</span>
+        ))}
+      </div>
       {n >= lines.length && (
         <button type="button" className="btn-screen on" onClick={() => engine.retry()}>
           [ REBOBINAR ]
@@ -56,22 +79,19 @@ export function GameOverScreen({ engine }: { engine: Engine }) {
   );
 }
 
-const END_DELAYS = [3200, 2600, 2800, 2400, 2800, 3000, 1200];
+const WIN_DELAYS = [1600, 2000, 2200, 1800, 2200, 900];
 
+/** GANASTE: saliste por la puerta del fondo con las tres cintas. */
 export function EndScreen() {
-  const ui = useUI();
-  const secs = ui.ending?.seconds ?? 0;
-  const dur = `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
   const lines = [
-    { t: 'FIN', c: 'big' },
-    { t: 'El inspector Salgado nunca salió de la casa Carvajal.', c: '' },
-    { t: 'Su cámara apareció en la galería, prendida.', c: '' },
-    { t: 'Tenía una cuarta cinta adentro.', c: '' },
-    { t: `CINTA 04 — duración ${dur}`, c: '' },
-    { t: 'En el barrio dicen que la pieza del fondo sigue alquilada.', c: '' },
-    { t: 'REC ●', c: 'red' },
+    { t: 'ESCAPASTE', c: 'big win' },
+    { t: 'Saliste de la casa Carvajal con las tres cintas.', c: '' },
+    { t: 'Amanece en Banfield. El primer colectivo pasa por la avenida.', c: '' },
+    { t: 'Las cintas de Salgado ya no se pierden en la pieza del fondo.', c: '' },
+    { t: 'En el barrio dicen que la pieza sigue alquilada.', c: 'dim' },
+    { t: 'FIN', c: 'red' },
   ];
-  const n = useReveal(lines.length, END_DELAYS);
+  const n = useReveal(lines.length, WIN_DELAYS);
   return (
     <div className="screen">
       <div className="noise-bg" />
@@ -82,6 +102,41 @@ export function EndScreen() {
           </p>
         ))}
       </div>
+      {n >= 2 && <Stats won />}
+      {n >= lines.length && (
+        <>
+          <button type="button" className="btn-screen on" onClick={() => location.reload()}>
+            [ JUGAR DE NUEVO ]
+          </button>
+          <Credits />
+        </>
+      )}
+    </div>
+  );
+}
+
+const LOST_DELAYS = [1400, 1800, 2000, 900];
+
+/** PERDISTE: te atrapó sin rebobinados. */
+export function LostScreen() {
+  const lines = [
+    { t: 'PERDISTE', c: 'big red' },
+    { t: 'Te atrapó tres veces. No quedan rebobinados.', c: '' },
+    { t: 'Ahora la pieza del fondo tiene una cinta más: la tuya.', c: '' },
+    { t: 'REC ●', c: 'red' },
+  ];
+  const n = useReveal(lines.length, LOST_DELAYS);
+  return (
+    <div className="screen">
+      <div className="noise-bg" />
+      <div className="end-lines">
+        {lines.map((l, i) => (
+          <p key={l.t} className={`${l.c} ${i < n ? 'on' : ''}`}>
+            {l.t}
+          </p>
+        ))}
+      </div>
+      {n >= 2 && <Stats won={false} />}
       {n >= lines.length && (
         <>
           <button type="button" className="btn-screen on" onClick={() => location.reload()}>

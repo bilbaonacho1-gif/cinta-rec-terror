@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { store } from './store';
 
 /**
@@ -39,4 +41,15 @@ export function trackAsset(name: string, weight: number): (e: ProgressEvent) => 
 export function finishAsset(name: string): void {
   progress.set(name, 1);
   publish();
+}
+
+/**
+ * Los .glb tienen la geometría comprimida con Draco (≈ 3,6 MB → 1,7 MB): el decodificador WASM está en
+ * public/draco/ y se precarga apenas arranca la página.
+ */
+const draco = new DRACOLoader(loadingManager).setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+draco.preload();
+
+export function makeGLTFLoader(): GLTFLoader {
+  return new GLTFLoader(loadingManager).setDRACOLoader(draco);
 }

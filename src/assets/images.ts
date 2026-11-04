@@ -537,3 +537,23 @@ export function cardboardSign(text: string, seed = 9): Canvas2D {
   grain(c, 0.2);
   return c;
 }
+
+/** Dorso de la foto de familia: anotación a mano, con letra de otra época. */
+export function photoBack(): Canvas2D {
+  const c = makeCanvas(512, 440, 1932);
+  const { ctx, w, h } = c;
+  ctx.fillStyle = '#d9cdb2';
+  ctx.fillRect(0, 0, w, h);
+  blotches(c, 14, '#8a6a3a', 12, 60, 0.35);
+  const ink = '#14102a';
+  handwriting(c, 'Tucumán, 9 de octubre de 1932', 30, 74, 32, ink, { jitter: 0.1 });
+  handwriting(c, 'Papá, mamá, los chicos y Ramoncito.', 30, 142, 27, ink, { jitter: 0.1 });
+  handwriting(c, 'El fotógrafo dice que atrás', 30, 200, 27, ink, { jitter: 0.1 });
+  handwriting(c, 'no salió nada.', 30, 240, 27, ink, { jitter: 0.1 });
+  handwriting(c, 'Que nadie la mire con una cámara.', 30, 310, 28, '#8a1410', { jitter: 0.14 });
+  ctx.fillStyle = withAlpha('#3a2a14', 0.5);
+  ctx.font = '13px monospace';
+  ctx.fillText('FOTO ESTUDIO "LA MODERNA" · S. M. DE TUCUMÁN', 34, h - 40);
+  grain(c, 0.25);
+  return c;
+}
